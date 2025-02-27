@@ -11,7 +11,6 @@ const mcpSseUrl = document.getElementById('mcpSseUrl');
 const queryInput = document.getElementById('queryInput');
 const reconnectBtn = document.getElementById('reconnectBtn');
 const sendBtn = document.getElementById('sendBtn');
-const spinner = document.getElementById('spinner');
 const statusIcon = document.getElementById('statusIcon');
 
 const messages = []; // Local message array for display only
@@ -27,7 +26,7 @@ const STATUS = {
     CONNECTED: 'Connected',
     CONNECTING: 'Connecting',
     FAILED: 'Connection failed',
-    FAILED_TIMEOUT: 'Failed to connect after multiple attempts'
+    FAILED_TIMEOUT: 'Failed to connect after multiple attempts',
 };
 
 // ================== SSE CONNECTION SETUP ==================
@@ -266,7 +265,7 @@ async function attemptConnection(isInitial = false) {
     if (isInitial) {
         if (connectionAttempts >= maxAttempts) {
             updateMcpServerStatus(STATUS.FAILED);
-            appendMessage('internal', STATUS.FAILED_TIMEOUT + '. Please try reconnecting manually.');
+            appendMessage('internal', `${STATUS.FAILED_TIMEOUT}. Please try reconnecting manually.`);
             return;
         }
         connectionAttempts++;
@@ -337,7 +336,6 @@ function updateMcpServerStatus(status) {
 function startRegularChecks() {
     setInterval(() => attemptConnection(false), 5000);
 }
-
 
 // Manual reconnect button
 reconnectBtn.addEventListener('click', async () => {
