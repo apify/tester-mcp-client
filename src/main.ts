@@ -68,7 +68,7 @@ if (ACTOR_IS_AT_HOME) {
 let ACTOR_TIMEOUT_AT: number | undefined;
 try {
     ACTOR_TIMEOUT_AT = process.env.ACTOR_TIMEOUT_AT ? new Date(process.env.ACTOR_TIMEOUT_AT).getTime() : undefined;
-} catch (err) {
+} catch {
     ACTOR_TIMEOUT_AT = undefined;
 }
 
@@ -80,35 +80,17 @@ app.use(cors());
 const filename = fileURLToPath(import.meta.url);
 const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
+let isChargingForQueryAnswered = true;
 app.use(express.static(publicPath));
 
 const input = processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
 log.debug(`systemPrompt: ${input.systemPrompt}`);
 log.debug(`mcpSseUrl: ${input.mcpSseUrl}`);
 log.debug(`modelName: ${input.modelName}`);
+log.debug(`llmProviderApiKey: ****${input.llmProviderApiKey?.slice(0, 4)}****`);
 
-// 4) We'll store the SSE clients (browsers) in an array
-type SSEClient = { id: number; res: express.Response };
-let sseClients: SSEClient[] = [];
-let clientIdCounter = 0;
-let totalTokenUsageInput = 0;
-let totalTokenUsageOutput = 0;
-let isChargingForQueryAnswered = true;
-
-// Create a single instance of your MCP client
-const client = new MCPClient(
-    input.mcpSseUrl,
-    input.headers,
-    input.systemPrompt,
-    input.modelName,
-    input.llmProviderApiKey,
-    input.modelMaxOutputTokens,
-    input.maxNumberOfToolCalls,
-    input.toolCallTimeoutSec,
-);
-
-if (input.llmProviderApiKey) {
-    log.info('Using provided API key for LLM provider');
+if (input.llmProviderApiKey && input.llmProviderApiKey !== '') {
+    log.info('Using user provided API key for LLM provider');
     isChargingForQueryAnswered = false;
 } else {
     log.info('No API key provided for LLM provider, Actor will charge for query answered event');
@@ -119,6 +101,25 @@ if (!input.llmProviderApiKey) {
     log.error('No API key provided for LLM provider. Report this issue to Actor developer.');
     await Actor.exit('No API key provided for LLM provider. Report this issue to Actor developer.');
 }
+
+// 4) We'll store the SSE clients (browsers) in an array
+type SSEClient = { id: number; res: express.Response };
+let sseClients: SSEClient[] = [];
+let clientIdCounter = 0;
+let totalTokenUsageInput = 0;
+let totalTokenUsageOutput = 0;
+
+// Create a single instance of your MCP client
+const client = new MCPClient(
+    input.mcpSseUrl,
+    input.headers,
+    input.systemPrompt,
+    input.modelName,
+    input.llmProviderApiKey,
+    input.modelMaxOutputTokens,
+    input.maxNumberOfToolCallsPerQuery,
+    input.toolCallTimeoutSec,
+);
 
 // 5) SSE endpoint for the client.js (browser) to connect to
 app.get('/sse', (req, res) => {
@@ -163,7 +164,7 @@ app.post('/message', async (req, res) => {
         if (isChargingForQueryAnswered) {
             log.info(`Charging query answered event wth ${input.modelName} model`);
             const eventName = input.modelName === 'claude-3-5-haiku-latest' ? Event.QUERY_ANSWERED_HAIKU_3_5 : Event.QUERY_ANSWERED_SONNET_3_7;
-        await Actor.charge({ eventName });
+            await Actor.charge({ eventName });
         }
 
         return res.json({ ok: true });
@@ -229,7 +230,6 @@ app.get('/check-actor-timeout', (_req, res) => {
         timeoutAt: ACTOR_TIMEOUT_AT,
     });
 });
-
 
 /**
  * POST /conversation/reset to reset the conversation

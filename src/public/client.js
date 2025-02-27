@@ -307,7 +307,7 @@ async function checkActorTimeout() {
                     timeoutCheckInterval = null;
                 }
             } else {
-                appendMessage('internal', `⚠️ Actor will timeout in ${secondsLeft} seconds.\n` )
+                appendMessage('internal', `⚠️ Actor will timeout in ${secondsLeft} seconds.\n`);
             }
         }
     } catch (err) {

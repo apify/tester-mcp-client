@@ -35,7 +35,7 @@
                 "claude-3-5-haiku-latest"
             ],
             "enumTitles": [
-                "Claude 3.5 Sonnet (latest)",
+                "Claude 3.7 Sonnet (latest)",
                 "Claude 3.5 Haiku (latest)"
             ],
             "default": "claude-3-7-sonnet-latest"
@@ -56,10 +56,10 @@
             "default": 2048,
             "maximum": 10000
         },
-        "maxNumberOfToolCalls": {
-            "title": "Maximum number of tool calls",
+        "maxNumberOfToolCallsPerQuery": {
+            "title": "Maximum number of tool calls per query",
             "type": "integer",
-            "description": "Maximum number of times a tool can be called in a single request. Keep this number low for simple flows",
+            "description": "Maximum number of times a tool can be called with one query. Keep this number low for simple flows",
             "editor": "number",
             "prefill": 5,
             "default": 5

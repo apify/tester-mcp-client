@@ -30,7 +30,7 @@ export class MCPClient {
     private readonly systemPrompt: string;
     private readonly modelName: string;
     private readonly modelMaxOutputTokens: number;
-    private readonly maxNumberOfToolCalls: number;
+    private readonly maxNumberOfToolCallsPerQuery: number;
     private readonly toolCallTimeoutSec: number;
     private client = new Client(
         { name: 'example-client', version: '0.1.0' },
@@ -46,7 +46,7 @@ export class MCPClient {
         modelName: string,
         apiKey: string,
         modelMaxOutputTokens: number,
-        maxNumberOfToolCalls: number,
+        maxNumberOfToolCallsPerQuery: number,
         toolCallTimeoutSec: number,
     ) {
         this.serverUrl = serverUrl;
@@ -54,7 +54,7 @@ export class MCPClient {
         this.customHeaders = headers;
         this.modelName = modelName;
         this.modelMaxOutputTokens = modelMaxOutputTokens;
-        this.maxNumberOfToolCalls = maxNumberOfToolCalls;
+        this.maxNumberOfToolCallsPerQuery = maxNumberOfToolCallsPerQuery;
         this.toolCallTimeoutSec = toolCallTimeoutSec;
         this.anthropic = new Anthropic({ apiKey });
     }
@@ -130,9 +130,9 @@ export class MCPClient {
                 this.conversation.push({ role: 'assistant', content: block.text || '' });
                 sseEmit('assistant', block.text || '');
             } else if (block.type === 'tool_use') {
-                if (toolCallCount > this.maxNumberOfToolCalls) {
+                if (toolCallCount > this.maxNumberOfToolCallsPerQuery) {
                     this.conversation.push({ role: 'assistant', content: `Too many tool calls!` });
-                    sseEmit('assistant', `Too many tool calls! Limit is ${this.maxNumberOfToolCalls}`);
+                    sseEmit('assistant', `Too many tool calls! Limit is ${this.maxNumberOfToolCallsPerQuery}`);
                     return;
                 }
                 const msgAssistant = {

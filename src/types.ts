@@ -2,7 +2,7 @@ export type Input = {
     llmProviderApiKey: string,
     modelName: string,
     headers: Record<string, string>,
-    maxNumberOfToolCalls: number,
+    maxNumberOfToolCallsPerQuery: number,
     modelMaxOutputTokens: number,
     mcpSseUrl: string,
     systemPrompt: string,
