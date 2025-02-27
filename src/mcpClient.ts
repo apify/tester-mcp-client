@@ -131,8 +131,18 @@ export class MCPClient {
                 sseEmit('assistant', block.text || '');
             } else if (block.type === 'tool_use') {
                 if (toolCallCount > this.maxNumberOfToolCallsPerQuery) {
-                    this.conversation.push({ role: 'assistant', content: `Too many tool calls!` });
-                    sseEmit('assistant', `Too many tool calls! Limit is ${this.maxNumberOfToolCallsPerQuery}`);
+                    const msg = `Too many tool calls in a single turn! Limit is ${this.maxNumberOfToolCallsPerQuery}.
+                        You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
+                    this.conversation.push({ role: 'assistant', content: msg });
+                    sseEmit('assistant', msg);
+                    const finalResponse = await this.anthropic.messages.create({
+                        model: this.modelName,
+                        max_tokens: this.modelMaxOutputTokens,
+                        messages: this.conversation,
+                        system: this.systemPrompt,
+                        tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+                    });
+                    this.conversation.push({ role: 'assistant', content: finalResponse.content || '' });
                     return;
                 }
                 const msgAssistant = {
