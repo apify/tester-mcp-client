@@ -70,6 +70,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Start connection attempt loop
     await attemptConnection(true);
+
+    // Add this near the DOMContentLoaded event listener
+    window.addEventListener('beforeunload', async (event) => {
+        // Note: Most modern browsers require the event to be handled synchronously
+        // and don't allow async operations during beforeunload
+        try {
+            // Synchronous fetch using XMLHttpRequest
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/conversation/reset', false);  // false makes it synchronous
+            xhr.send();
+            
+            messages.length = 0;
+            chatLog.innerHTML = '';
+        } catch (err) {
+            console.error('Error resetting conversation on page reload:', err);
+        }
+    });
 });
 
 // ================== 4) MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
