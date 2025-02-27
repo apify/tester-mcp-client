@@ -15,6 +15,8 @@ const spinner = document.getElementById('spinner');
 const statusIcon = document.getElementById('statusIcon');
 
 const messages = []; // Local message array for display only
+const timeoutCheckDelay = 20000; // 20 seconds between checks
+let timeoutCheckInterval = null; // Will store the interval ID
 
 // ================== SSE CONNECTION SETUP ==================
 const eventSource = new EventSource('/sse');
@@ -280,7 +282,7 @@ function updateMcpServerStatus(status) {
 reconnectBtn.addEventListener('click', async () => {
     mcpServerStatus.textContent = 'Reconnecting...';
     /* eslint-disable-next-line no-promise-executor-return */
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 5000));
     reconnect();
 });
 
@@ -288,6 +290,35 @@ reconnectBtn.addEventListener('click', async () => {
 setInterval(async () => {
     await checkConnection();
 }, 5000);
+
+// Add this new function near other utility functions
+async function checkActorTimeout() {
+    try {
+        const response = await fetch('/check-actor-timeout');
+        const data = await response.json();
+
+        if (data.timeoutImminent) {
+            const secondsLeft = Math.ceil(data.timeUntilTimeout / 1000);
+            if (secondsLeft <= 0) {
+                appendMessage('internal', '⚠️ Actor has timed out and stopped running. Please restart the Actor to continue.');
+                // Clear the interval when timeout is detected
+                if (timeoutCheckInterval) {
+                    clearInterval(timeoutCheckInterval);
+                    timeoutCheckInterval = null;
+                }
+            } else {
+                appendMessage('internal', `⚠️ Actor will timeout in ${secondsLeft} seconds.\n` )
+            }
+        }
+    } catch (err) {
+        console.error('Error checking timeout status:', err);
+    }
+}
+
+// Store the interval ID when creating it
+timeoutCheckInterval = setInterval(async () => {
+    await checkActorTimeout();
+}, timeoutCheckDelay);
 
 // ================== SEND BUTTON, ENTER KEY HANDLER ==================
 sendBtn.addEventListener('click', () => {

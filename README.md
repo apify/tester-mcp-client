@@ -16,6 +16,15 @@ It is a standalone Actor server designed for testing MCP servers over SSE.
 
 ## 🎯 What does Tester MCP Client do?
 
+When connected to [Actors-MCP-Server](https://apify.com/apify/actors-mcp-server) the Tester MCP Client provides an interactive chat interface where you can:
+
+- "What are the most popular Actors for social media scraping?"
+- "Show me the best way to use the Instagram Scraper"
+- "Which Actor should I use to extract data from LinkedIn?"
+- "Can you help me understand how to scrape Google search results?"
+
+## 📖 How does it work?
+
 The Apify MCP Client connects to a running MCP server over Server-Sent Events (SSE) and it does the following:
 
 - Initiates an SSE connection to the MCP server `/sse`.

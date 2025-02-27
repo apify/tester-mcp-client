@@ -40,6 +40,14 @@ if (ACTOR_IS_AT_HOME) {
     PORT = '3000';
 }
 
+// Add near the top after Actor.init()
+let ACTOR_TIMEOUT_AT: number | undefined;
+try {
+    ACTOR_TIMEOUT_AT = process.env.ACTOR_TIMEOUT_AT ? new Date(process.env.ACTOR_TIMEOUT_AT).getTime() : undefined;
+} catch (err) {
+    ACTOR_TIMEOUT_AT = undefined;
+}
+
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -148,6 +156,26 @@ app.get('/client-info', (_req, res) => {
         information: BASIC_INFORMATION,
     });
 });
+
+/**
+ * GET /check-timeout endpoint to check if the actor is about to timeout
+ */
+app.get('/check-actor-timeout', (_req, res) => {
+    if (!ACTOR_TIMEOUT_AT) {
+        return res.json({ timeoutImminent: false });
+    }
+
+    const now = Date.now();
+    const timeUntilTimeout = ACTOR_TIMEOUT_AT - now;
+    const timeoutImminent = timeUntilTimeout < 60000; // Less than 1 minute remaining
+
+    return res.json({
+        timeoutImminent,
+        timeUntilTimeout,
+        timeoutAt: ACTOR_TIMEOUT_AT,
+    });
+});
+
 
 /**
  * POST /conversation/reset to reset the conversation
