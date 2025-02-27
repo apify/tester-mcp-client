@@ -18,6 +18,18 @@ const messages = []; // Local message array for display only
 const timeoutCheckDelay = 20000; // 20 seconds between checks
 let timeoutCheckInterval = null; // Will store the interval ID
 
+let connectionAttempts = 0;
+const maxAttempts = 12; // Try for up to 2 minutes (12 * 10 seconds)
+const retryDelay = 10000; // 10 seconds between attempts
+
+// Add status message constants
+const STATUS = {
+    CONNECTED: 'Connected',
+    CONNECTING: 'Connecting...',
+    FAILED: 'Connection failed',
+    FAILED_TIMEOUT: 'Failed to connect after multiple attempts'
+};
+
 // ================== SSE CONNECTION SETUP ==================
 const eventSource = new EventSource('/sse');
 
@@ -43,27 +55,22 @@ eventSource.onerror = (err) => {
 // ================== ON PAGE LOAD (DOMContentLoaded) ==================
 //  - Fetch client info
 //  - Set up everything else
+
+// Initial connection on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    // Immediately call /client-info
+    // Fetch client info first
     try {
         const resp = await fetch('/client-info');
         const data = await resp.json();
-
-        if (mcpSseUrl) {
-            mcpSseUrl.textContent = data.mcpSseUrl;
-        }
-        if (clientInfo) {
-            clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
-        }
-        if (information) {
-            information.innerHTML = `${data.information}`;
-        }
+        if (mcpSseUrl) mcpSseUrl.textContent = data.mcpSseUrl;
+        if (clientInfo) clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
+        if (information) information.innerHTML = `${data.information}`;
     } catch (err) {
         console.error('Error fetching client info:', err);
     }
 
-    // Then attempt reconnect once the page is ready
-    reconnect();
+    // Start connection attempt loop
+    await attemptConnection(true);
 });
 
 // ================== 4) MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
@@ -235,61 +242,68 @@ clearBtn.addEventListener('click', async () => {
 
 // ================== SERVER CONNECTIVITY CHECKS & RECONNECT LOGIC ==================
 
-async function checkConnection() {
-    fetch('/pingMcpServer')
-        .then((resp) => resp.json())
-        .then((data) => {
-            if (mcpServerStatus) {
-                updateMcpServerStatus(data.status);
-            }
-        })
-        .catch((err) => {
-            console.error('Network error calling /pingMcpServer:', err);
-            if (mcpServerStatus) {
-                mcpServerStatus.textContent = 'Network error';
-            }
-        });
-}
+async function attemptConnection(isInitial = false) {
+    if (isInitial) {
+        if (connectionAttempts >= maxAttempts) {
+            updateMcpServerStatus(STATUS.FAILED);
+            appendMessage('internal', STATUS.FAILED_TIMEOUT + '. Please try reconnecting manually.');
+            return;
+        }
+        connectionAttempts++;
+        mcpServerStatus.textContent = `${STATUS.CONNECTING} (attempt ${connectionAttempts}/${maxAttempts})`;
+    }
 
-function reconnect() {
-    fetch('/reconnect', { method: 'POST' })
-        .then((resp) => resp.json())
-        .then((data) => {
-            if (mcpServerStatus) {
-                updateMcpServerStatus(data.status);
-            }
-        })
-        .catch((err) => {
-            console.error('Network error calling /reconnect:', err);
-            if (mcpServerStatus) {
-                updateMcpServerStatus('Network error');
-            }
-        });
-}
+    try {
+        await fetch('/reconnect', { method: 'POST' });
 
-function updateMcpServerStatus(status) {
-    const isOk = status === true || status === 'OK';
-    if (isOk) {
-        statusIcon.style.backgroundColor = 'green';
-        mcpServerStatus.textContent = 'OK';
-    } else {
-        statusIcon.style.backgroundColor = 'red';
-        mcpServerStatus.textContent = 'Disconnected';
+        const resp = await fetch('/pingMcpServer');
+        const data = await resp.json();
+
+        if (data.status === true || data.status === 'OK') {
+            updateMcpServerStatus(STATUS.CONNECTED);
+            if (isInitial) {
+                appendMessage('internal', 'Successfully connected to MCP server!');
+                startRegularChecks();
+            }
+        } else {
+            updateMcpServerStatus(STATUS.CONNECTING);
+            if (isInitial) {
+                setTimeout(() => attemptConnection(true), retryDelay);
+            }
+        }
+    } catch (err) {
+        console.error('Connection attempt failed:', err);
+        updateMcpServerStatus(STATUS.FAILED);
+        if (isInitial) {
+            setTimeout(() => attemptConnection(true), retryDelay);
+        }
     }
 }
 
-// Reconnect button logic
-reconnectBtn.addEventListener('click', async () => {
-    mcpServerStatus.textContent = 'Reconnecting...';
-    /* eslint-disable-next-line no-promise-executor-return */
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    reconnect();
-});
+function updateMcpServerStatus(status) {
+    const isOk = status === true || status === 'OK' || status === STATUS.CONNECTED;
+    if (isOk) {
+        statusIcon.style.backgroundColor = 'green';
+        mcpServerStatus.textContent = STATUS.CONNECTED;
+    } else if (status === STATUS.CONNECTING) {
+        statusIcon.style.backgroundColor = 'orange';
+        mcpServerStatus.textContent = status;
+    } else {
+        statusIcon.style.backgroundColor = 'red';
+        mcpServerStatus.textContent = status;
+    }
+}
 
-// Periodically check the connection status
-setInterval(async () => {
-    await checkConnection();
-}, 5000);
+function startRegularChecks() {
+    setInterval(() => attemptConnection(false), 5000);
+}
+
+
+// Manual reconnect button
+reconnectBtn.addEventListener('click', async () => {
+    connectionAttempts = 0;
+    await attemptConnection(true);
+});
 
 // Add this new function near other utility functions
 async function checkActorTimeout() {

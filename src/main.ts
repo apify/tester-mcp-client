@@ -143,8 +143,6 @@ app.post('/message', async (req, res) => {
         const response = await client.processUserQuery(query, (role, content) => {
             broadcastSSE({ role, content });
         });
-
-        log.debug(`[internal] Token usage: ${JSON.stringify(response.usage)}`);
         // accumulate token usage for the whole run
         totalTokenUsageInput += response.usage?.input_tokens ?? 0;
         totalTokenUsageOutput += response.usage?.output_tokens ?? 0;
@@ -152,7 +150,7 @@ app.post('/message', async (req, res) => {
 
         // Charge for task completion
         if (isChargingForQueryAnswered) {
-            log.info(`Charging query answered event wth ${input.modelName} model`);
+            log.info(`Charging query answered event with ${input.modelName} model`);
             const eventName = input.modelName === 'claude-3-5-haiku-latest' ? Event.QUERY_ANSWERED_HAIKU_3_5 : Event.QUERY_ANSWERED_SONNET_3_7;
             await Actor.charge({ eventName });
         }
