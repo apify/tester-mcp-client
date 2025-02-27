@@ -192,7 +192,7 @@ export class MCPClient {
      * 2) If "tool_use" is present, call the main actor's tool via `this.mcpClient.callTool()`.
      * 3) Return or yield partial results so we can SSE them to the browser.
      */
-    async processUserQuery(query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void): Promise<void> {
+    async processUserQuery(query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void): Promise<Message> {
         await this.connectToServer(); // ensure connected
         log.debug(`[internal] User query: ${JSON.stringify(query)}`);
         this.conversation.push({ role: 'user', content: query });
@@ -205,6 +205,8 @@ export class MCPClient {
             tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
         });
         log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
+        log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
         await this.handleLLMResponse(response, sseEmit);
+        return response;
     }
 }

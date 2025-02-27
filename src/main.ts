@@ -16,13 +16,37 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 
-import { BASIC_INFORMATION } from './const.js';
+import { BASIC_INFORMATION, Event } from './const.js';
 import { processInput } from './input.js';
 import { log } from './logger.js';
 import { MCPClient } from './mcpClient.js';
 import type { Input } from './types.js';
 
 await Actor.init();
+
+// Add after Actor.init()
+const RUNNING_TIME_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
+setInterval(async () => {
+    try {
+        const memoryMB = Actor.getEnv().memoryMbytes || 128;
+        const memoryMBCount = Math.ceil(memoryMB / 128);
+        log.info(`Charging for running time (every 5 minutes): ${memoryMB} MB`);
+        await Actor.charge({ eventName: Event.ACTOR_RUNNING_TIME, count: memoryMBCount });
+    } catch (error) {
+        log.error('Failed to charge for running time', { error });
+    }
+}, RUNNING_TIME_INTERVAL);
+
+try {
+    // Charge for memory usage on start
+    const memoryMB = Actor.getEnv().memoryMbytes || 128;
+    const memoryMBCount = Math.ceil(memoryMB / 128);
+    log.info(`Required memory: ${memoryMB} MB. Charging Actor start event.`);
+    await Actor.charge({ eventName: Event.ACTOR_STARTED, count: memoryMBCount });
+} catch (error) {
+    log.error('Failed to charge for actor start event', { error });
+    await Actor.exit('Failed to charge for actor start event');
+}
 
 const STANDBY_MODE = Actor.getEnv().metaOrigin === 'STANDBY';
 const ACTOR_IS_AT_HOME = Actor.isAtHome();
@@ -67,6 +91,9 @@ log.debug(`modelName: ${input.modelName}`);
 type SSEClient = { id: number; res: express.Response };
 let sseClients: SSEClient[] = [];
 let clientIdCounter = 0;
+let totalTokenUsageInput = 0;
+let totalTokenUsageOutput = 0;
+let isChargingForQueryAnswered = true;
 
 // Create a single instance of your MCP client
 const client = new MCPClient(
@@ -79,6 +106,19 @@ const client = new MCPClient(
     input.maxNumberOfToolCalls,
     input.toolCallTimeoutSec,
 );
+
+if (input.llmProviderApiKey) {
+    log.info('Using provided API key for LLM provider');
+    isChargingForQueryAnswered = false;
+} else {
+    log.info('No API key provided for LLM provider, Actor will charge for query answered event');
+    input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
+}
+
+if (!input.llmProviderApiKey) {
+    log.error('No API key provided for LLM provider. Report this issue to Actor developer.');
+    await Actor.exit('No API key provided for LLM provider. Report this issue to Actor developer.');
+}
 
 // 5) SSE endpoint for the client.js (browser) to connect to
 app.get('/sse', (req, res) => {
@@ -108,10 +148,24 @@ app.post('/message', async (req, res) => {
         return res.status(400).json({ error: 'Missing "query" field' });
     }
     try {
-        // We call MyMcpClient, passing a callback that broadcasts SSE events
-        await client.processUserQuery(query, (role, content) => {
+        // Process the query
+        const response = await client.processUserQuery(query, (role, content) => {
             broadcastSSE({ role, content });
         });
+
+        log.debug(`[internal] Token usage: ${JSON.stringify(response.usage)}`);
+        // accumulate token usage for the whole run
+        totalTokenUsageInput += response.usage?.input_tokens ?? 0;
+        totalTokenUsageOutput += response.usage?.output_tokens ?? 0;
+        log.debug(`[internal] Total token usage: ${totalTokenUsageInput} input, ${totalTokenUsageOutput} output`);
+
+        // Charge for task completion
+        if (isChargingForQueryAnswered) {
+            log.info(`Charging query answered event wth ${input.modelName} model`);
+            const eventName = input.modelName === 'claude-3-5-haiku-latest' ? Event.QUERY_ANSWERED_HAIKU_3_5 : Event.QUERY_ANSWERED_SONNET_3_7;
+        await Actor.charge({ eventName });
+        }
+
         return res.json({ ok: true });
     } catch (err) {
         log.error(`Error in processing user query: ${err}`);

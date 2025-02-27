@@ -1,9 +1,10 @@
 # Tester Client for Model Context Protocol (MCP)
 
-[//]: # ([![Actors MCP Client]&#40;https://apify.com/actor-badge?actor=jiri.spilka/tester-mcp-client&#41;]&#40;https://apify.com/jiri.spilka/tester-mcp-client&#41;)
+[![Actors MCP Client](https://apify.com/actor-badge?actor=jiri.spilka/tester-mcp-client)](https://apify.com/jiri.spilka/tester-mcp-client)
 
 Implementation of a model context protocol (MCP) client that connects to an MCP server using Server-Sent Events (SSE) and displays the conversation in a chat-like UI.
 It is a standalone Actor server designed for testing MCP servers over SSE.
+It is using [Pay-per-event](https://docs.apify.com/sdk/js/docs/guides/pay-per-event) pricing model.
 
 ## 🚀 Main features
 
@@ -53,22 +54,22 @@ INFO  Navigate to https://......runs.apify.net in your browser to interact with 
 
 In progress 🚧
 
-### Examples
+## 💰 Pricing
 
-Once you have the Tester MCP Client running, you can ask:
-- "What Apify Actors I can use"
-- "Which Actor is the best for scraping Instagram comments"
-- "Can you scrape the first 10 pages of Google search results for 'best restaurants in Prague'?"
+The Apify MCP Client is free to use. You only pay for LLM provider usage and resources consumed on the Apify platform.
 
-#### Pricing
+This Actor uses a modern and flexible approach for AI Agents monetization and pricing called [Pay-per-event](https://docs.apify.com/sdk/js/docs/guides/pay-per-event).
 
-The Apify MCP Client is free to use. You only pay for the resources you consume on the Apify platform.
+Events charged:
+- Actor start (based on memory used, charged per 128 MB unit)
+- Running time (charged every 5 minutes, per 128 MB unit)
+- Query answered (depends on the model used, not charged if you provide your own API key for LLM provider)
 
-Running the MCP Client for 1 hour costs approximately $0.06.
+When you use your own LLM provider API key, running the MCP Client for 1 hour with 128 MB memory costs approximately $0.06.
 With the Apify Free tier (no credit card required 💳), you can run the MCP Client for 80 hours per month.
 Definitely enough to test your MCP server!
 
-### How it works
+## 📖 How it works
 
 ```plaintext
 Browser ← (SSE) → Tester MCP Client  ← (SSE) → MCP Server
@@ -80,7 +81,7 @@ This separates extra client-side logic from the core server, making it easier to
 1. Navigate to `https://tester-mcp-client.apify.actor?token=YOUR-API-TOKEN` (or http://localhost:3000 if you are running it locally).
 2. Files `index.html` and `client.js` are served from the `public/` directory.
 3. Browser opens SSE stream via `GET /sse`.
-4. The user’s query is sent with `POST /message`.
+4. The user's query is sent with `POST /message`.
 5. Query processing:
     - Calls Large Language Model.
     - Optionally calls tools if required using

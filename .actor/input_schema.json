@@ -28,24 +28,22 @@
         "modelName": {
             "title": "Anthropic Claude model (Anthropic is only supported provider now)",
             "type": "string",
-            "description": "Select a model to be used for selecting tools and generating text.\n\n- Claude 3.5 Sonnet (2024-10-22) - the most intelligent model\n- Claude 3.5 Haiku (2024-10-22) - a fastest model\n- Claude 3 Haiku (2024-03-07) - a fastest and most compact model for near-instant responsiveness",
+            "description": "Select a model to be used for selecting tools and generating text.\n\n- Claude 3.7 Sonnet (latest) - the most intelligent model\n- Claude 3.5 Haiku (latest) - a fastest model",
             "editor": "select",
             "enum": [
-                "claude-3-5-sonnet-20241022",
-                "claude-3-5-haiku-20241022",
-                "claude-3-haiku-20240307"
+                "claude-3-7-sonnet-latest",
+                "claude-3-5-haiku-latest"
             ],
             "enumTitles": [
-                "Claude 3.5 Sonnet (2024-10-22)",
-                "Claude 3.5 Haiku (2024-10-22)",
-                "Claude 3 Haiku (2024-03-07)"
+                "Claude 3.5 Sonnet (latest)",
+                "Claude 3.5 Haiku (latest)"
             ],
-            "default": "claude-3-5-sonnet-20241022"
+            "default": "claude-3-7-sonnet-latest"
         },
         "llmProviderApiKey": {
             "title": "LLM Provider API key (Anthropic is only supported provider now)",
             "type": "string",
-            "description": "API key for accessing a Large Language Model",
+            "description": "API key for accessing a Large Language Model. If you provide your own API key, Actor will not charge for query answered event.",
             "editor": "textfield",
             "isSecret": true
         },
@@ -77,7 +75,6 @@
     },
     "required": [
         "mcpSseUrl",
-        "modelName",
-        "llmProviderApiKey"
+        "modelName"
     ]
 }

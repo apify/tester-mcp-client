@@ -1,0 +1,22 @@
+{
+    "actor-start-mb": {
+        "eventTitle": "Actor start per 128 MB",
+        "eventDescription": "Flat fee for starting an Actor run for each 128 MB of memory.",
+        "eventPriceUsd": 0.005
+    },
+    "actor-running-time-mb": {
+        "eventTitle": "Actor running time per 128 MB",
+        "eventDescription": "Cost per running time for each 128 MB of memory.",
+        "eventPriceUsd":0.005
+    },
+    "query-answered-sonnet-3-7": {
+        "eventTitle": "Query answer (Sonnet-3.7)",
+        "eventDescription": "Cost per query answered.",
+        "eventPriceUsd": 0.095
+    },
+    "query-answered-haiku-3-5": {
+        "eventTitle": "Query answer (Haiku-3.5)",
+        "eventDescription": "Cost per query answered.",
+        "eventPriceUsd": 0.03
+    }
+}

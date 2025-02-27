@@ -14,3 +14,10 @@ export const BASIC_INFORMATION = 'Once you have the Tester MCP Client running, y
     + '- "Which Actor is the best for scraping Instagram comments"\n'
     + "- \"Can you scrape the first 10 pages of Google search results for 'best restaurants in Prague'?\"\n"
     + '\n';
+
+export const Event = {
+    ACTOR_STARTED: 'actor-start-mb',
+    ACTOR_RUNNING_TIME: 'actor-running-time-mb',
+    QUERY_ANSWERED_SONNET_3_7: 'query-answered-sonnet-3-7',
+    QUERY_ANSWERED_HAIKU_3_5: 'query-answered-haiku-3-5',
+};
