@@ -202,8 +202,25 @@ function escapeHTML(str) {
 
 // ================== SENDING A USER QUERY (POST /message) ==================
 async function sendQuery(query) {
-    spinner.style.display = 'inline-block'; // show spinner
+    // Create and show typing indicator
+    const loadingRow = document.createElement('div');
+    loadingRow.className = 'message-row';
+    loadingRow.innerHTML = `
+        <div class="bubble loading">
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    `;
+    
+    // First append the user message
     appendMessage('user', query);
+    
+    // Then insert loading indicator as the last child of chatLog
+    chatLog.appendChild(loadingRow);
+    chatLog.scrollTop = chatLog.scrollHeight;
 
     try {
         const resp = await fetch('/message', {
@@ -218,7 +235,10 @@ async function sendQuery(query) {
     } catch (err) {
         appendMessage('internal', `Network error: ${err.message}`);
     } finally {
-        spinner.style.display = 'none'; // hide spinner
+        // Remove loading indicator
+        if (loadingRow.parentNode === chatLog) {
+            loadingRow.remove();
+        }
     }
 }
 
