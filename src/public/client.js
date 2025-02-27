@@ -11,7 +11,6 @@ const mcpSseUrl = document.getElementById('mcpSseUrl');
 const queryInput = document.getElementById('queryInput');
 const reconnectBtn = document.getElementById('reconnectBtn');
 const sendBtn = document.getElementById('sendBtn');
-const spinner = document.getElementById('spinner');
 const statusIcon = document.getElementById('statusIcon');
 
 const messages = []; // Local message array for display only
@@ -25,9 +24,9 @@ const retryDelay = 10000; // 10 seconds between attempts
 // Add status message constants
 const STATUS = {
     CONNECTED: 'Connected',
-    CONNECTING: 'Connecting...',
+    CONNECTING: 'Connecting',
     FAILED: 'Connection failed',
-    FAILED_TIMEOUT: 'Failed to connect after multiple attempts'
+    FAILED_TIMEOUT: 'Failed to connect after multiple attempts',
 };
 
 // ================== SSE CONNECTION SETUP ==================
@@ -71,6 +70,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Start connection attempt loop
     await attemptConnection(true);
+
+    // Add this near the DOMContentLoaded event listener
+    window.addEventListener('beforeunload', async (event) => {
+        // Note: Most modern browsers require the event to be handled synchronously
+        // and don't allow async operations during beforeunload
+        try {
+            // Synchronous fetch using XMLHttpRequest
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/conversation/reset', false);  // false makes it synchronous
+            xhr.send();
+            
+            messages.length = 0;
+            chatLog.innerHTML = '';
+        } catch (err) {
+            console.error('Error resetting conversation on page reload:', err);
+        }
+    });
 });
 
 // ================== 4) MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
@@ -135,7 +151,7 @@ function appendToolBlock(item) {
         container.innerHTML = `
 <details>
   <summary>Tool use: <strong>${item.name}</strong></summary>
-  <div style="font-size: 0.9rem; margin: 6px 0;">
+  <div style="font-size: 0.875rem; margin: 0.5rem 0;">
     <strong>ID:</strong> ${item.id || 'unknown'}
   </div>
   ${formatAnyContent(item.input)}
@@ -202,8 +218,25 @@ function escapeHTML(str) {
 
 // ================== SENDING A USER QUERY (POST /message) ==================
 async function sendQuery(query) {
-    spinner.style.display = 'inline-block'; // show spinner
+    // Create and show typing indicator
+    const loadingRow = document.createElement('div');
+    loadingRow.className = 'message-row';
+    loadingRow.innerHTML = `
+        <div class="bubble loading">
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    `;
+
+    // First append the user message
     appendMessage('user', query);
+
+    // Then insert loading indicator as the last child of chatLog
+    chatLog.appendChild(loadingRow);
+    chatLog.scrollTop = chatLog.scrollHeight;
 
     try {
         const resp = await fetch('/message', {
@@ -218,7 +251,10 @@ async function sendQuery(query) {
     } catch (err) {
         appendMessage('internal', `Network error: ${err.message}`);
     } finally {
-        spinner.style.display = 'none'; // hide spinner
+        // Remove loading indicator
+        if (loadingRow.parentNode === chatLog) {
+            loadingRow.remove();
+        }
     }
 }
 
@@ -246,11 +282,22 @@ async function attemptConnection(isInitial = false) {
     if (isInitial) {
         if (connectionAttempts >= maxAttempts) {
             updateMcpServerStatus(STATUS.FAILED);
-            appendMessage('internal', STATUS.FAILED_TIMEOUT + '. Please try reconnecting manually.');
+            appendMessage('internal', `${STATUS.FAILED_TIMEOUT}. Please try reconnecting manually.`);
             return;
         }
         connectionAttempts++;
-        mcpServerStatus.textContent = `${STATUS.CONNECTING} (attempt ${connectionAttempts}/${maxAttempts})`;
+        updateMcpServerStatus(STATUS.CONNECTING);
+        // Add attempt counter inline with smaller font
+        const attemptText = document.createElement('small');
+        attemptText.style.cssText = `
+            margin-left: 0.25rem;
+            opacity: 0.7;
+            font-size: 0.8em;
+            white-space: nowrap;
+            display: inline-block;
+        `;
+        attemptText.textContent = `(${connectionAttempts}/${maxAttempts})`;
+        mcpServerStatus.firstElementChild.appendChild(attemptText);
     }
 
     try {
@@ -283,21 +330,29 @@ async function attemptConnection(isInitial = false) {
 function updateMcpServerStatus(status) {
     const isOk = status === true || status === 'OK' || status === STATUS.CONNECTED;
     if (isOk) {
-        statusIcon.style.backgroundColor = 'green';
-        mcpServerStatus.textContent = STATUS.CONNECTED;
+        statusIcon.style.backgroundColor = '#22c55e'; // green-500
+        mcpServerStatus.innerHTML = STATUS.CONNECTED;
     } else if (status === STATUS.CONNECTING) {
-        statusIcon.style.backgroundColor = 'orange';
-        mcpServerStatus.textContent = status;
+        statusIcon.style.backgroundColor = '#f97316'; // orange-500
+        mcpServerStatus.innerHTML = `
+            <div style="display: flex; align-items: center; white-space: nowrap;">
+                ${STATUS.CONNECTING}
+                <div class="typing-indicator" style="margin-left: 0.25rem;">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            </div>
+        `;
     } else {
-        statusIcon.style.backgroundColor = 'red';
-        mcpServerStatus.textContent = status;
+        statusIcon.style.backgroundColor = '#ef4444'; // red-500
+        mcpServerStatus.innerHTML = status;
     }
 }
 
 function startRegularChecks() {
     setInterval(() => attemptConnection(false), 5000);
 }
-
 
 // Manual reconnect button
 reconnectBtn.addEventListener('click', async () => {
