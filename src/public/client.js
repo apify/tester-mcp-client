@@ -283,13 +283,13 @@ async function attemptConnection(isInitial = false) {
 function updateMcpServerStatus(status) {
     const isOk = status === true || status === 'OK' || status === STATUS.CONNECTED;
     if (isOk) {
-        statusIcon.style.backgroundColor = 'green';
+        statusIcon.style.backgroundColor = '#22c55e'; // green-500
         mcpServerStatus.textContent = STATUS.CONNECTED;
     } else if (status === STATUS.CONNECTING) {
-        statusIcon.style.backgroundColor = 'orange';
+        statusIcon.style.backgroundColor = '#f97316'; // orange-500
         mcpServerStatus.textContent = status;
     } else {
-        statusIcon.style.backgroundColor = 'red';
+        statusIcon.style.backgroundColor = '#ef4444'; // red-500
         mcpServerStatus.textContent = status;
     }
 }
