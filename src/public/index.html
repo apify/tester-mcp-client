@@ -43,11 +43,15 @@
         }
 
         .header {
-            margin-bottom: 1rem;
+            margin-bottom: 0.5rem;
         }
 
         .header h2 {
             font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .header details {
             margin-bottom: 0.5rem;
         }
 
@@ -55,8 +59,12 @@
             background: var(--chat-bg);
             border: 1px solid var(--border-color);
             border-radius: 0.5rem;
-            padding: 0.75rem;
-            margin-bottom: 0.75rem;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        details + details {
+            margin-top: -0.25rem; /* Reduce space between consecutive details */
         }
 
         summary {
@@ -88,7 +96,7 @@
         }
 
         .bubble {
-            max-width: 50%;
+            max-width: 85%;
             padding: 0.6rem 0.8rem;
             font-size: 0.875rem;
             border-radius: 1.2rem;
@@ -98,6 +106,7 @@
             background: var(--user-message-bg);
             border: 1px solid #bfdbfe;
             border-bottom-right-radius: 0.3rem;
+            max-width: 60%;
         }
 
         .bubble.assistant {
@@ -110,6 +119,8 @@
             background: var(--internal-message-bg);
             font-size: 0.875rem;
             color: var(--text-secondary);
+            max-width: 100%;
+            text-align: center;
         }
 
         .tool-block {
@@ -118,12 +129,14 @@
             padding: 0.75rem;
             margin: 0.5rem 0;
             font-size: 0.875rem;
-            max-width: 50%;
+            max-width: 100%;
+            width: 100%;
         }
 
         .tool-row {
             margin: 0.5rem 0;
             display: flex;
+            width: 100%;
         }
 
         .tool-block details {
@@ -131,6 +144,7 @@
             border: none;
             padding: 0;
             margin: 0;
+            width: 100%;
         }
 
         .tool-block summary {
@@ -152,7 +166,7 @@
             margin-bottom: 0.5rem;
             display: grid;
             grid-template-columns: 1fr auto;
-            align-items: start;
+            align-items: center;
             position: sticky;
             bottom: 0;
             background: var(--bg-color);
@@ -163,7 +177,7 @@
             padding: 0.5rem 0.8rem;
             font-size: 0.9rem;
             min-height: 45px;
-            height: auto;
+            height: 45px;
             max-height: 150px;
             border-radius: 0.8rem;
             resize: none;
@@ -179,12 +193,11 @@
         }
 
         #sendBtn {
-            min-height: 45px;
             height: 45px;
             padding: 0 1.5rem;
             white-space: nowrap;
             border-radius: 0.8rem;
-            align-self: flex-start;
+            align-self: stretch;
         }
 
         button {
@@ -305,6 +318,10 @@
             }
 
             .bubble {
+                max-width: 85%;
+            }
+
+            .bubble.user {
                 max-width: 75%;
                 font-size: 0.85rem;
             }
@@ -318,7 +335,7 @@
             }
 
             .tool-block {
-                max-width: 75%;
+                max-width: 100%;
             }
         }
     </style>

@@ -25,7 +25,7 @@ const retryDelay = 10000; // 10 seconds between attempts
 // Add status message constants
 const STATUS = {
     CONNECTED: 'Connected',
-    CONNECTING: 'Connecting...',
+    CONNECTING: 'Connecting',
     FAILED: 'Connection failed',
     FAILED_TIMEOUT: 'Failed to connect after multiple attempts'
 };
@@ -214,10 +214,10 @@ async function sendQuery(query) {
             </div>
         </div>
     `;
-    
+
     // First append the user message
     appendMessage('user', query);
-    
+
     // Then insert loading indicator as the last child of chatLog
     chatLog.appendChild(loadingRow);
     chatLog.scrollTop = chatLog.scrollHeight;
@@ -270,7 +270,18 @@ async function attemptConnection(isInitial = false) {
             return;
         }
         connectionAttempts++;
-        mcpServerStatus.textContent = `${STATUS.CONNECTING} (attempt ${connectionAttempts}/${maxAttempts})`;
+        updateMcpServerStatus(STATUS.CONNECTING);
+        // Add attempt counter inline with smaller font
+        const attemptText = document.createElement('small');
+        attemptText.style.cssText = `
+            margin-left: 0.25rem;
+            opacity: 0.7;
+            font-size: 0.8em;
+            white-space: nowrap;
+            display: inline-block;
+        `;
+        attemptText.textContent = `(${connectionAttempts}/${maxAttempts})`;
+        mcpServerStatus.firstElementChild.appendChild(attemptText);
     }
 
     try {
@@ -304,13 +315,22 @@ function updateMcpServerStatus(status) {
     const isOk = status === true || status === 'OK' || status === STATUS.CONNECTED;
     if (isOk) {
         statusIcon.style.backgroundColor = '#22c55e'; // green-500
-        mcpServerStatus.textContent = STATUS.CONNECTED;
+        mcpServerStatus.innerHTML = STATUS.CONNECTED;
     } else if (status === STATUS.CONNECTING) {
         statusIcon.style.backgroundColor = '#f97316'; // orange-500
-        mcpServerStatus.textContent = status;
+        mcpServerStatus.innerHTML = `
+            <div style="display: flex; align-items: center; white-space: nowrap;">
+                ${STATUS.CONNECTING}
+                <div class="typing-indicator" style="margin-left: 0.25rem;">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            </div>
+        `;
     } else {
         statusIcon.style.backgroundColor = '#ef4444'; // red-500
-        mcpServerStatus.textContent = status;
+        mcpServerStatus.innerHTML = status;
     }
 }
 
