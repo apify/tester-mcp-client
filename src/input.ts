@@ -1,5 +1,8 @@
 import { defaults, MISSING_PARAMETER_ERROR } from './const.js';
 import type { Input, StandbyInput } from './types.js';
+import { log } from './logger.js';
+
+export let isChargingForQueryAnswered = true;
 
 /**
  * Process input parameters, split actors string into an array
@@ -32,11 +35,12 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
         throw new Error(`LLM model name is not provided. ${MISSING_PARAMETER_ERROR}: 'modelName'`);
     }
 
-    if (!input.llmProviderApiKey && process.env.LLM_PROVIDER_API_KEY) {
-        input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY;
+    if (input.llmProviderApiKey && input.llmProviderApiKey !== '') {
+        log.info('Using user provided API key for LLM provider');
+        isChargingForQueryAnswered = false;
+    } else {
+        log.info('No API key provided for LLM provider, Actor will charge for query answered event');
+        input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
     }
-    if (!input.llmProviderApiKey) {
-        throw new Error(`LLM provider API key is not provided. ${MISSING_PARAMETER_ERROR}: 'llmProviderApiKey'`);
-    }
-    return input;
+    return input as Input;
 }

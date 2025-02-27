@@ -17,7 +17,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 
 import { BASIC_INFORMATION, Event } from './const.js';
-import { processInput } from './input.js';
+import { processInput, isChargingForQueryAnswered } from './input.js';
 import { log } from './logger.js';
 import { MCPClient } from './mcpClient.js';
 import type { Input } from './types.js';
@@ -80,22 +80,12 @@ app.use(cors());
 const filename = fileURLToPath(import.meta.url);
 const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
-let isChargingForQueryAnswered = true;
 app.use(express.static(publicPath));
 
 const input = processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
 log.debug(`systemPrompt: ${input.systemPrompt}`);
 log.debug(`mcpSseUrl: ${input.mcpSseUrl}`);
 log.debug(`modelName: ${input.modelName}`);
-log.debug(`llmProviderApiKey: ****${input.llmProviderApiKey?.slice(0, 4)}****`);
-
-if (input.llmProviderApiKey && input.llmProviderApiKey !== '') {
-    log.info('Using user provided API key for LLM provider');
-    isChargingForQueryAnswered = false;
-} else {
-    log.info('No API key provided for LLM provider, Actor will charge for query answered event');
-    input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
-}
 
 if (!input.llmProviderApiKey) {
     log.error('No API key provided for LLM provider. Report this issue to Actor developer.');
