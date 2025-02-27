@@ -135,7 +135,7 @@ function appendToolBlock(item) {
         container.innerHTML = `
 <details>
   <summary>Tool use: <strong>${item.name}</strong></summary>
-  <div style="font-size: 0.9rem; margin: 6px 0;">
+  <div style="font-size: 0.875rem; margin: 0.5rem 0;">
     <strong>ID:</strong> ${item.id || 'unknown'}
   </div>
   ${formatAnyContent(item.input)}
