@@ -1,8 +1,12 @@
 import { defaults, MISSING_PARAMETER_ERROR } from './const.js';
-import type { Input, StandbyInput } from './types.js';
 import { log } from './logger.js';
+import type { Input, StandbyInput } from './types.js';
 
-export let isChargingForQueryAnswered = true;
+let isChargingForQueryAnswered = true;
+
+export function getChargeForQueryAnswered() {
+    return isChargingForQueryAnswered;
+}
 
 /**
  * Process input parameters, split actors string into an array

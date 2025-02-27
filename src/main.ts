@@ -17,7 +17,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 
 import { BASIC_INFORMATION, Event } from './const.js';
-import { processInput, isChargingForQueryAnswered } from './input.js';
+import { processInput, getChargeForQueryAnswered } from './input.js';
 import { log } from './logger.js';
 import { MCPClient } from './mcpClient.js';
 import type { Input } from './types.js';
@@ -149,7 +149,7 @@ app.post('/message', async (req, res) => {
         log.debug(`[internal] Total token usage: ${totalTokenUsageInput} input, ${totalTokenUsageOutput} output`);
 
         // Charge for task completion
-        if (isChargingForQueryAnswered) {
+        if (getChargeForQueryAnswered()) {
             log.info(`Charging query answered event with ${input.modelName} model`);
             const eventName = input.modelName === 'claude-3-5-haiku-latest' ? Event.QUERY_ANSWERED_HAIKU_3_5 : Event.QUERY_ANSWERED_SONNET_3_7;
             await Actor.charge({ eventName });
