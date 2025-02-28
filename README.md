@@ -8,6 +8,12 @@ It uses [Pay-per-event](https://docs.apify.com/sdk/js/docs/guides/pay-per-event)
 
 For more information, see the [Model Context Protocol](https://modelcontextprotocol.org/) website or blogpost [What is MCP and why does it matter?](https://blog.apify.com/what-is-model-context-protocol/).
 
+Once you run the Actor, check the output or logs for a link to the chat UI interface to interact with the MCP server.
+The URL will look like this and will vary each run:
+```shell
+INFO  Navigate to https://......runs.apify.net in your browser to interact with an MCP server.
+```
+
 ## 🚀 Main features
 
 - 🔌 Connects to an MCP server using Server-Sent Events (SSE)
