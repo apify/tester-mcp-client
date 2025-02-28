@@ -244,5 +244,5 @@ app.listen(PORT, () => {
     log.info(`Serving from path ${path.join(publicPath, 'index.html')}`);
     const msg= `Navigate to ${publicUrl} to interact with chat-ui interface.`;
     log.info(msg);
-    Actor.pushData({publicUrl: msg});
+    Actor.pushData({text: msg, url: publicUrl});
 });
