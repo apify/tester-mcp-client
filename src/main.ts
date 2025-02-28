@@ -242,7 +242,7 @@ app.get('*', (_req, res) => {
 
 app.listen(PORT, () => {
     log.info(`Serving from path ${path.join(publicPath, 'index.html')}`);
-    const msg= `Navigate to ${publicUrl} in your browser to interact with chat-ui interface.`;
+    const msg= `Navigate to ${publicUrl} to interact with chat-ui interface.`;
     log.info(msg);
     Actor.pushData({publicUrl: msg});
 });

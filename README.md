@@ -11,7 +11,7 @@ For more information, see the [Model Context Protocol](https://modelcontextproto
 Once you run the Actor, check the output or logs for a link to the chat UI interface to interact with the MCP server.
 The URL will look like this and will vary each run:
 ```shell
-INFO  Navigate to https://......runs.apify.net in your browser to interact with an MCP server.
+Navigate to https://...apify.net to interact with chat-ui interface.
 ```
 
 ## 🚀 Main features
