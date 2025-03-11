@@ -32,6 +32,6 @@
     "query-answered": {
         "eventTitle": "Query answered",
         "eventDescription": "Cost per query answered.",
-        "eventPriceUsd": 0.001
+        "eventPriceUsd": 0.005
     }
 }
