@@ -7,7 +7,7 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import type { Message, MessageParam, ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema, ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
@@ -84,6 +84,17 @@ export class MCPClient {
         );
         await this.client.connect(transport);
         await this.updateTools();
+        await this.setNotifications();
+    }
+
+    async setNotifications() {
+        this.client.setNotificationHandler(
+            ToolListChangedNotificationSchema,
+            async () => {
+                log.debug('Received notification that tools list changed, refreshing...');
+                await this.updateTools();
+            },
+        );
     }
 
     async isConnected() {
@@ -179,7 +190,6 @@ export class MCPClient {
                 }
                 sseEmit(msgUser.role, msgUser.content);
                 this.conversation.push(msgUser);
-                await this.updateTools(); // update tools in the case a new tool was added
                 // Get next response from Claude
                 log.debug('[internal] Get model response from tool result');
                 const nextResponse: Message = await this.anthropic.messages.create({

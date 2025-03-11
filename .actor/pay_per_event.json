@@ -1,22 +1,37 @@
 {
-    "actor-start-mb": {
-        "eventTitle": "Actor start per 128 MB",
-        "eventDescription": "Flat fee for starting an Actor run for each 128 MB of memory.",
+    "actor-start": {
+        "eventTitle": "Actor start",
+        "eventDescription": "Flat fee for starting an Actor run.",
         "eventPriceUsd": 0.005
     },
-    "actor-running-time-mb": {
-        "eventTitle": "Actor running time per 128 MB",
-        "eventDescription": "Cost per running time for each 128 MB of memory.",
+    "actor-running-time": {
+        "eventTitle": "Actor running time (5 minutes)",
+        "eventDescription": "Cost per running time for each 5 minutes.",
         "eventPriceUsd":0.005
     },
-    "query-answered-sonnet-3-7": {
-        "eventTitle": "Query answer (Sonnet-3.7)",
-        "eventDescription": "Cost per query answered.",
-        "eventPriceUsd": 0.095
+    "input-tokens-sonnet-3-7": {
+        "eventTitle": "Input tokens (Sonnet-3.7)",
+        "eventDescription": "Cost per 100 input tokens for Claude 3.7 Sonnet (1M tokens = 3$).",
+        "eventPriceUsd": 0.0003
     },
-    "query-answered-haiku-3-5": {
-        "eventTitle": "Query answer (Haiku-3.5)",
+    "output-tokens-sonnet-3-7": {
+        "eventTitle": "Output tokens (Sonnet-3.7)",
+        "eventDescription": "Cost per 100 output tokens for Claude 3.7 Sonnet (1M tokens = 15$).",
+        "eventPriceUsd": 0.0015
+    },
+    "input-tokens-haiku-3-5": {
+        "eventTitle": "Input tokens (Haiku-3.5)",
+        "eventDescription": "Cost per 100 input tokens for Claude 3.5 Haiku (1M tokens = 0.8$).",
+        "eventPriceUsd": 0.00008
+    },
+    "output-tokens-haiku-3-5": {
+        "eventTitle": "Output tokens (Haiku-3.5)",
+        "eventDescription": "Cost per 100 output tokens for Claude 3.5 Haiku (1M tokens = 4$).",
+        "eventPriceUsd": 0.0004
+    },
+    "query-answered": {
+        "eventTitle": "Query answered",
         "eventDescription": "Cost per query answered.",
-        "eventPriceUsd": 0.03
+        "eventPriceUsd": 0.001
     }
 }

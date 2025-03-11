@@ -2,10 +2,10 @@ import { defaults, MISSING_PARAMETER_ERROR } from './const.js';
 import { log } from './logger.js';
 import type { Input, StandbyInput } from './types.js';
 
-let isChargingForQueryAnswered = true;
+let isChargingForTokens = true;
 
-export function getChargeForQueryAnswered() {
-    return isChargingForQueryAnswered;
+export function getChargeForTokens() {
+    return isChargingForTokens;
 }
 
 /**
@@ -41,9 +41,9 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
 
     if (input.llmProviderApiKey && input.llmProviderApiKey !== '') {
         log.info('Using user provided API key for LLM provider');
-        isChargingForQueryAnswered = false;
+        isChargingForTokens = false;
     } else {
-        log.info('No API key provided for LLM provider, Actor will charge for query answered event');
+        log.info('No API key provided for LLM provider, Actor will charge for tokens usage');
         input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
     }
     return input as Input;

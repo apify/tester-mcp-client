@@ -69,8 +69,8 @@
             "type": "integer",
             "description": "Timeout for a single tool call in seconds",
             "editor": "number",
-            "prefill": 120,
-            "default": 120
+            "prefill": 300,
+            "default": 300
         }
     },
     "required": [

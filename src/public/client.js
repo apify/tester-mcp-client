@@ -72,15 +72,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     await attemptConnection(true);
 
     // Add this near the DOMContentLoaded event listener
-    window.addEventListener('beforeunload', async (event) => {
+    window.addEventListener('beforeunload', async () => {
         // Note: Most modern browsers require the event to be handled synchronously
         // and don't allow async operations during beforeunload
         try {
             // Synchronous fetch using XMLHttpRequest
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/conversation/reset', false);  // false makes it synchronous
+            xhr.open('POST', '/conversation/reset', false); // false makes it synchronous
             xhr.send();
-            
+
             messages.length = 0;
             chatLog.innerHTML = '';
         } catch (err) {
@@ -301,8 +301,6 @@ async function attemptConnection(isInitial = false) {
     }
 
     try {
-        await fetch('/reconnect', { method: 'POST' });
-
         const resp = await fetch('/pingMcpServer');
         const data = await resp.json();
 
@@ -314,6 +312,7 @@ async function attemptConnection(isInitial = false) {
             }
         } else {
             updateMcpServerStatus(STATUS.CONNECTING);
+            await fetch('/reconnect', { method: 'POST' });
             if (isInitial) {
                 setTimeout(() => attemptConnection(true), retryDelay);
             }

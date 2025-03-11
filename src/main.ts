@@ -17,7 +17,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 
 import { BASIC_INFORMATION, Event } from './const.js';
-import { processInput, getChargeForQueryAnswered } from './input.js';
+import { processInput, getChargeForTokens } from './input.js';
 import { log } from './logger.js';
 import { MCPClient } from './mcpClient.js';
 import type { Input } from './types.js';
@@ -28,10 +28,8 @@ await Actor.init();
 const RUNNING_TIME_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 setInterval(async () => {
     try {
-        const memoryMB = Actor.getEnv().memoryMbytes || 128;
-        const memoryMBCount = Math.ceil(memoryMB / 128);
-        log.info(`Charging for running time (every 5 minutes): ${memoryMB} MB`);
-        await Actor.charge({ eventName: Event.ACTOR_RUNNING_TIME, count: memoryMBCount });
+        log.info(`Charging for running time (every 5 minutes)`);
+        await Actor.charge({ eventName: Event.ACTOR_RUNNING_TIME });
     } catch (error) {
         log.error('Failed to charge for running time', { error });
     }
@@ -39,10 +37,8 @@ setInterval(async () => {
 
 try {
     // Charge for memory usage on start
-    const memoryMB = Actor.getEnv().memoryMbytes || 128;
-    const memoryMBCount = Math.ceil(memoryMB / 128);
-    log.info(`Required memory: ${memoryMB} MB. Charging Actor start event.`);
-    await Actor.charge({ eventName: Event.ACTOR_STARTED, count: memoryMBCount });
+    log.info(`Charging Actor start event.`);
+    await Actor.charge({ eventName: Event.ACTOR_STARTED });
 } catch (error) {
     log.error('Failed to charge for actor start event', { error });
     await Actor.exit('Failed to charge for actor start event');
@@ -144,16 +140,25 @@ app.post('/message', async (req, res) => {
             broadcastSSE({ role, content });
         });
         // accumulate token usage for the whole run
-        totalTokenUsageInput += response.usage?.input_tokens ?? 0;
-        totalTokenUsageOutput += response.usage?.output_tokens ?? 0;
+        const inputTokens = response.usage?.input_tokens ?? 0;
+        const outputTokens = response.usage?.output_tokens ?? 0;
+        totalTokenUsageInput += inputTokens;
+        totalTokenUsageOutput += outputTokens;
         log.debug(`[internal] Total token usage: ${totalTokenUsageInput} input, ${totalTokenUsageOutput} output`);
 
         // Charge for task completion
-        if (getChargeForQueryAnswered()) {
-            log.info(`Charging query answered event with ${input.modelName} model`);
-            const eventName = input.modelName === 'claude-3-5-haiku-latest' ? Event.QUERY_ANSWERED_HAIKU_3_5 : Event.QUERY_ANSWERED_SONNET_3_7;
-            await Actor.charge({ eventName });
+        if (getChargeForTokens()) {
+            log.info(`Charging tokens usage with ${input.modelName} model`);
+            const eventNameInput = input.modelName === 'claude-3-5-haiku-latest' ? Event.INPUT_TOKENS_HAIKU_3_5 : Event.INPUT_TOKENS_SONNET_3_7;
+            const eventNameOutput = input.modelName === 'claude-3-5-haiku-latest' ? Event.OUTPUT_TOKENS_HAIKU_3_5 : Event.OUTPUT_TOKENS_SONNET_3_7;
+
+            await Actor.charge({ eventName: eventNameInput, count: Math.ceil(inputTokens / 100) });
+            await Actor.charge({ eventName: eventNameOutput, count: Math.ceil(outputTokens / 100) });
+            log.info(`Charged ${inputTokens} input tokens and ${outputTokens} output tokens`);
         }
+
+        await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
+        log.info(`Charged query answered event`);
 
         return res.json({ ok: true });
     } catch (err) {
@@ -240,9 +245,9 @@ app.get('*', (_req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     log.info(`Serving from path ${path.join(publicPath, 'index.html')}`);
-    const msg= `Navigate to ${publicUrl} to interact with chat-ui interface.`;
+    const msg = `Navigate to ${publicUrl} to interact with chat-ui interface.`;
     log.info(msg);
-    Actor.pushData({text: msg, url: publicUrl});
+    await Actor.pushData({ text: msg, url: publicUrl });
 });
