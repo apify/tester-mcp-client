@@ -6,9 +6,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "main": "dist/index.js",
+  "main": "dist/src/main.js",
   "bin": {
-    "actors-mcp-client": "./dist/index.js"
+    "actors-mcp-client": "./dist/src/main.js"
   },
   "files": [
     "dist",
@@ -52,14 +52,14 @@
   },
   "scripts": {
     "start": "npm run start:dev",
-    "start:prod": "node dist/main.js",
+    "start:prod": "node dist/src/main.js",
     "start:dev": "tsx src/main.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "build": "tsc",
     "test": "echo \"Error: oops, the actor has no tests yet, sad!\" && exit 1",
     "watch": "tsc --watch",
-    "inspector": "npx @modelcontextprotocol/inspector dist/main.js"
+    "inspector": "npx @modelcontextprotocol/inspector dist/src/main.js"
   },
   "author": "Apify",
   "license": "MIT"
