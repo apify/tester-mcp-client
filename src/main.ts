@@ -177,12 +177,13 @@ app.post('/message', async (req, res) => {
         await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
         log.info(`Charged query answered event`);
 
-        const content = response.content[0];
         let text = '';
-        if (content.type === 'text') {
-            text = content.text;
-        } else if (content.type === 'tool_use') {
-            text = JSON.stringify(content.input);
+        for (const item of response.content) {
+            if (item.type === 'text') {
+                text += (text ? '\n\n' : '') + (item.text || '');
+            } else if (item.type === 'tool_use') {
+                text += (text ? '\n\n' : '') + JSON.stringify(item.input);
+            }
         }
         await Actor.pushData({ query, response: text, responseObject: response });
 
