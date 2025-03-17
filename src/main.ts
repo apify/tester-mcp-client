@@ -140,9 +140,6 @@ app.get('/sse', (req, res) => {
         sseClients = sseClients.filter((c) => c.id !== clientId);
         res.end();
     });
-
-    // Send initial connection success message
-    res.write('data: {"role":"internal","content":"Connected to server"}\n\n');
 });
 
 // 6) POST /message from the browser to server
