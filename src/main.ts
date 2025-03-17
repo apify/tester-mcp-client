@@ -176,7 +176,15 @@ app.post('/message', async (req, res) => {
 
         await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
         log.info(`Charged query answered event`);
-        await Actor.pushData({ query, response });
+
+        const content = response.content[0];
+        let text = '';
+        if (content.type === 'text') {
+            text = content.text;
+        } else if (content.type === 'tool_use') {
+            text = JSON.stringify(content.input);
+        }
+        await Actor.pushData({ query, response: text, responseObject: response });
 
         return res.json({ ok: true });
     } catch (err) {
