@@ -20,6 +20,8 @@ let timeoutCheckInterval = null; // Will store the interval ID
 let connectionAttempts = 0;
 const maxAttempts = 12; // Try for up to 2 minutes (12 * 10 seconds)
 const retryDelay = 10000; // 10 seconds between attempts
+const regularCheckDelay = 5000; // 5 seconds between checks
+const sseReconnectDelay = 2000; // 2 seconds before reconnecting
 
 // Add status message constants
 const STATUS = {
@@ -30,7 +32,7 @@ const STATUS = {
 };
 
 // ================== SSE CONNECTION SETUP ==================
-const eventSource = new EventSource('/sse');
+let eventSource = new EventSource('/sse');
 
 // Handle incoming SSE messages
 eventSource.onmessage = (event) => {
@@ -48,8 +50,33 @@ eventSource.onmessage = (event) => {
 // Handle SSE errors
 eventSource.onerror = (err) => {
     console.error('SSE error:', err);
-    appendMessage('internal', `SSE connection error: ${JSON.stringify(err.message) || err}`);
+    const errorMessage = err instanceof Error ? err.message : 'Connection lost. Attempting to reconnect...';
+    appendMessage('internal', errorMessage);
+
+    // Close the current connection
+    eventSource.close();
+
+    // Attempt to reconnect after a delay
+    setTimeout(reconnectSSE, sseReconnectDelay); // Wait 2 seconds before reconnecting
 };
+
+// Reconnection logic extracted into a separate function
+function reconnectSSE() {
+    console.log('Attempting to reconnect SSE...');
+    const newEventSource = new EventSource('/sse');
+
+    newEventSource.onopen = () => {
+        console.log('SSE reconnected successfully');
+        appendMessage('internal', 'Connection restored!');
+        eventSource = newEventSource; // Update the global eventSource reference
+
+        // Reattach message handler
+        newEventSource.onmessage = eventSource.onmessage;
+        newEventSource.onerror = eventSource.onerror;
+    };
+
+    newEventSource.onerror = eventSource.onerror; // Reuse the same error handler
+}
 
 // ================== ON PAGE LOAD (DOMContentLoaded) ==================
 //  - Fetch client info
@@ -350,7 +377,7 @@ function updateMcpServerStatus(status) {
 }
 
 function startRegularChecks() {
-    setInterval(() => attemptConnection(false), 5000);
+    setInterval(() => attemptConnection(false), regularCheckDelay);
 }
 
 // Manual reconnect button

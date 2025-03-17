@@ -111,6 +111,10 @@ export class MCPClient {
         }
     }
 
+    getConversation() {
+        return this.conversation;
+    }
+
     resetConversation() {
         this.conversation = [];
     }

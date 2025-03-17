@@ -95,7 +95,7 @@ let clientIdCounter = 0;
 let totalTokenUsageInput = 0;
 let totalTokenUsageOutput = 0;
 
-// Create a single instance of your MCP client
+// Create a single instance of your MCP client (client is connected to the MCP-server)
 const client = new MCPClient(
     input.mcpSseUrl,
     input.headers,
@@ -107,28 +107,45 @@ const client = new MCPClient(
     input.toolCallTimeoutSec,
 );
 
-// 5) SSE endpoint for the client.js (browser) to connect to
+// 5) SSE endpoint for the client.js (browser)
 app.get('/sse', (req, res) => {
     // Required headers for SSE
     res.set({
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable proxy buffering
     });
     res.flushHeaders();
 
     const clientId = ++clientIdCounter;
+    const keepAliveInterval = setInterval(() => {
+        res.write(':\n\n'); // Send a comment as a keepalive
+    }, 5000); // Send keepalive every 5 seconds
+
     sseClients.push({ id: clientId, res });
     log.debug(`New SSE client: ${clientId}`);
 
-    // If client closes connection, remove from array
+    // If client closes connection, remove from array and clear interval
     req.on('close', () => {
         log.debug(`SSE client disconnected: ${clientId}`);
+        clearInterval(keepAliveInterval);
         sseClients = sseClients.filter((c) => c.id !== clientId);
     });
+
+    // Handle client timeout
+    req.on('timeout', () => {
+        log.debug(`SSE client timeout: ${clientId}`);
+        clearInterval(keepAliveInterval);
+        sseClients = sseClients.filter((c) => c.id !== clientId);
+        res.end();
+    });
+
+    // Send initial connection success message
+    res.write('data: {"role":"internal","content":"Connected to server"}\n\n');
 });
 
-// 6) POST /message from the browser
+// 6) POST /message from the browser to server
 app.post('/message', async (req, res) => {
     const { query } = req.body;
     if (!query) {
@@ -159,10 +176,11 @@ app.post('/message', async (req, res) => {
 
         await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
         log.info(`Charged query answered event`);
+        await Actor.pushData({ query, response });
 
         return res.json({ ok: true });
     } catch (err) {
-        log.error(`Error in processing user query: ${err}`);
+        log.error(`Error in processing user query: ${err}, conversation: ${client.getConversation()}`);
         return res.json({ error: (err as Error).message });
     }
 });
