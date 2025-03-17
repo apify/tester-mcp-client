@@ -14,13 +14,13 @@ const sendBtn = document.getElementById('sendBtn');
 const statusIcon = document.getElementById('statusIcon');
 
 const messages = []; // Local message array for display only
-const timeoutCheckDelay = 20000; // 20 seconds between checks
+const actorTimeoutCheckDelay = 60000; // 60 seconds between checks
 let timeoutCheckInterval = null; // Will store the interval ID
 
 let connectionAttempts = 0;
 const maxAttempts = 12; // Try for up to 2 minutes (12 * 10 seconds)
 const retryDelay = 10000; // 10 seconds between attempts
-const regularCheckDelay = 5000; // 5 seconds between checks
+const regularCheckDelay = 30000; // 30 seconds between checks
 const sseReconnectDelay = 2000; // 2 seconds before reconnecting
 
 // Add status message constants
@@ -413,7 +413,7 @@ async function checkActorTimeout() {
 // Store the interval ID when creating it
 timeoutCheckInterval = setInterval(async () => {
     await checkActorTimeout();
-}, timeoutCheckDelay);
+}, actorTimeoutCheckDelay);
 
 // ================== SEND BUTTON, ENTER KEY HANDLER ==================
 sendBtn.addEventListener('click', () => {
