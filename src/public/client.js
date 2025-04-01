@@ -13,6 +13,34 @@ const reconnectBtn = document.getElementById('reconnectBtn');
 const sendBtn = document.getElementById('sendBtn');
 const statusIcon = document.getElementById('statusIcon');
 
+// Scroll behavior state
+let shouldAutoScroll = true;
+let isScrolling = false;
+
+// Scroll event listener with debounce
+let scrollTimeout;
+chatLog.addEventListener('scroll', () => {
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+        const isAtBottom = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 50;
+        shouldAutoScroll = isAtBottom;
+    }, 100);
+});
+
+// Improved scrollToBottom function
+function scrollToBottom() {
+    if (!shouldAutoScroll || isScrolling) return;
+    isScrolling = true;
+    chatLog.scrollTo({
+        top: chatLog.scrollHeight,
+        behavior: 'smooth',
+    });
+    // Reset scrolling flag after animation
+    setTimeout(() => {
+        isScrolling = false;
+    }, 300);
+}
+
 const messages = []; // Local message array for display only
 const actorTimeoutCheckDelay = 60000; // 60 seconds between checks
 let timeoutCheckInterval = null; // Will store the interval ID
@@ -161,7 +189,7 @@ function appendSingleBubble(role, content) {
 
     row.appendChild(bubble);
     chatLog.appendChild(row);
-    chatLog.scrollTop = chatLog.scrollHeight;
+    scrollToBottom();
 }
 
 /**
@@ -194,7 +222,7 @@ function appendToolBlock(item) {
 
     row.appendChild(container);
     chatLog.appendChild(row);
-    chatLog.scrollTop = chatLog.scrollHeight;
+    scrollToBottom();
 }
 
 // ================== UTILITY FOR FORMATTING CONTENT (JSON, MD, ETC.) ==================
@@ -263,7 +291,7 @@ async function sendQuery(query) {
 
     // Then insert loading indicator as the last child of chatLog
     chatLog.appendChild(loadingRow);
-    chatLog.scrollTop = chatLog.scrollHeight;
+    scrollToBottom();
 
     try {
         const resp = await fetch('/message', {
