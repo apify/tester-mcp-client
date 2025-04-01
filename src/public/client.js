@@ -15,10 +15,11 @@ const statusIcon = document.getElementById('statusIcon');
 
 // Simple scroll to bottom function
 function scrollToBottom() {
-    const lastMessage = chatLog.lastElementChild;
-    if (lastMessage) {
-        lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
+    // Scroll the chat log
+    chatLog.scrollTop = chatLog.scrollHeight;
+    
+    // Also scroll the window to ensure we're at the bottom
+    window.scrollTo(0, document.body.scrollHeight);
 }
 
 const messages = []; // Local message array for display only
