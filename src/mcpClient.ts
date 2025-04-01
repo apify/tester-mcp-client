@@ -11,14 +11,10 @@ import { CallToolResultSchema, ToolListChangedNotificationSchema } from '@modelc
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
+import type { Tool, TokenCharger } from './types.js';
+
 if (typeof globalThis.EventSource === 'undefined') {
     globalThis.EventSource = EventSource as unknown as typeof globalThis.EventSource;
-}
-
-export type Tool = {
-    name: string;
-    description: string | undefined;
-    input_schema: unknown;
 }
 
 export class MCPClient {
@@ -32,6 +28,7 @@ export class MCPClient {
     private readonly modelMaxOutputTokens: number;
     private readonly maxNumberOfToolCallsPerQuery: number;
     private readonly toolCallTimeoutSec: number;
+    private readonly tokenCharger: TokenCharger | null;
     private client = new Client(
         { name: 'example-client', version: '0.1.0' },
         { capabilities: {} },
@@ -48,6 +45,7 @@ export class MCPClient {
         modelMaxOutputTokens: number,
         maxNumberOfToolCallsPerQuery: number,
         toolCallTimeoutSec: number,
+        tokenCharger: TokenCharger | null = null,
     ) {
         this.serverUrl = serverUrl;
         this.systemPrompt = systemPrompt;
@@ -56,6 +54,7 @@ export class MCPClient {
         this.modelMaxOutputTokens = modelMaxOutputTokens;
         this.maxNumberOfToolCallsPerQuery = maxNumberOfToolCallsPerQuery;
         this.toolCallTimeoutSec = toolCallTimeoutSec;
+        this.tokenCharger = tokenCharger;
         this.anthropic = new Anthropic({ apiKey });
     }
 
@@ -129,34 +128,67 @@ export class MCPClient {
         log.debug(`Connected to server with tools: ${this.tools.map((x) => x.name)}`);
     }
 
-    /**
-     * Process LLM response and check whether it contains any tool calls.
-     * If a tool call is found, call the tool and return the response and save the results to messages with type: user.
-     * If the tools response is too large, truncate it to the limit.
-     * If the number of tool calls exceeds the limit, return an error message.
-     */
-    async handleLLMResponse(
-        response: Message,
-        sseEmit: (role: string, content: string | ContentBlockParam[]) => void,
-        toolCallCount = 0,
-    ) {
+    private async createMessageWithRetry(
+        messages: MessageParam[],
+        maxRetries = 3,
+        retryDelayMs = 2000, // 2 seconds
+    ): Promise<Message> {
+        let lastError: Error | null = null;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await this.anthropic.messages.create({
+                    model: this.modelName,
+                    max_tokens: this.modelMaxOutputTokens,
+                    messages,
+                    system: this.systemPrompt,
+                    tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+                });
+                if (this.tokenCharger && response.usage) {
+                    const inputTokens = response.usage.input_tokens ?? 0;
+                    const outputTokens = response.usage.output_tokens ?? 0;
+                    await this.tokenCharger.chargeTokens(inputTokens, outputTokens, this.modelName);
+                }
+                return response;
+            } catch (error) {
+                lastError = error as Error;
+                // Handle retryable errors (429 and 529)
+                if (error instanceof Error && (error.message.includes('429') || error.message.includes('529'))) {
+                    if (attempt < maxRetries) {
+                        const delay = attempt * retryDelayMs;
+                        const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
+                        log.debug(`${errorType} hit, attempt ${attempt}/${maxRetries}. Retrying in ${delay / 1000} seconds...`);
+                        await new Promise((resolve) => {
+                            setTimeout(resolve, delay);
+                        });
+                        continue;
+                    } else {
+                        const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
+                        const errorMsg = errorType === 'Rate limit'
+                            ? `Rate limit exceeded after ${maxRetries} attempts. Please try again in a few minutes or consider switching to a different model`
+                            : 'Server is currently experiencing high load. Please try again in a few moments or consider switching to a different model.';
+                        throw new Error(errorMsg);
+                    }
+                }
+                // For other errors, throw immediately
+                throw error;
+            }
+        }
+        throw lastError;
+    }
+
+    async handleLLMResponse(response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCount = 0) {
         for (const block of response.content) {
             if (block.type === 'text') {
                 this.conversation.push({ role: 'assistant', content: block.text || '' });
                 sseEmit('assistant', block.text || '');
             } else if (block.type === 'tool_use') {
                 if (toolCallCount > this.maxNumberOfToolCallsPerQuery) {
-                    const msg = `Too many tool calls in a single turn! Limit is ${this.maxNumberOfToolCallsPerQuery}.
+                    const msg = `Too many tool calls in a single turn! This has been implemented to prevent infinite loops.
+                        Limit is ${this.maxNumberOfToolCallsPerQuery}.
                         You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
                     this.conversation.push({ role: 'assistant', content: msg });
                     sseEmit('assistant', msg);
-                    const finalResponse = await this.anthropic.messages.create({
-                        model: this.modelName,
-                        max_tokens: this.modelMaxOutputTokens,
-                        messages: this.conversation,
-                        system: this.systemPrompt,
-                        tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
-                    });
+                    const finalResponse = await this.createMessageWithRetry(this.conversation);
                     this.conversation.push({ role: 'assistant', content: finalResponse.content || '' });
                     return;
                 }
@@ -164,8 +196,8 @@ export class MCPClient {
                     role: 'assistant' as const,
                     content: [{ id: block.id, input: block.input, name: block.name, type: 'tool_use' as const }],
                 };
-                sseEmit(msgAssistant.role, msgAssistant.content);
                 this.conversation.push(msgAssistant);
+                sseEmit(msgAssistant.role, msgAssistant.content);
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const params = { name: block.name, arguments: block.input as any };
                 log.debug(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
@@ -196,13 +228,7 @@ export class MCPClient {
                 this.conversation.push(msgUser);
                 // Get next response from Claude
                 log.debug('[internal] Get model response from tool result');
-                const nextResponse: Message = await this.anthropic.messages.create({
-                    model: this.modelName,
-                    max_tokens: this.modelMaxOutputTokens,
-                    messages: this.conversation,
-                    system: this.systemPrompt,
-                    tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
-                });
+                const nextResponse: Message = await this.createMessageWithRetry(this.conversation);
                 log.debug('[internal] Received response from model');
                 await this.handleLLMResponse(nextResponse, sseEmit, toolCallCount + 1);
                 log.debug('[internal] Finished processing tool result');
@@ -221,16 +247,17 @@ export class MCPClient {
         log.debug(`[internal] User query: ${JSON.stringify(query)}`);
         this.conversation.push({ role: 'user', content: query });
 
-        const response: Message = await this.anthropic.messages.create({
-            model: this.modelName,
-            max_tokens: this.modelMaxOutputTokens,
-            messages: this.conversation,
-            system: this.systemPrompt,
-            tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
-        });
-        log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
-        log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
-        await this.handleLLMResponse(response, sseEmit);
-        return response;
+        try {
+            const response = await this.createMessageWithRetry(this.conversation);
+            log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
+            log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
+            await this.handleLLMResponse(response, sseEmit);
+            return response;
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.conversation.push({ role: 'assistant', content: errorMsg });
+            sseEmit('assistant', errorMsg);
+            throw new Error(errorMsg);
+        }
     }
 }

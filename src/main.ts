@@ -20,9 +20,32 @@ import { BASIC_INFORMATION, Event } from './const.js';
 import { processInput, getChargeForTokens } from './input.js';
 import { log } from './logger.js';
 import { MCPClient } from './mcpClient.js';
-import type { Input } from './types.js';
+import type { TokenCharger, Input } from './types.js';
 
 await Actor.init();
+
+/**
+ * Charge for token usage
+ * We don't want to implement this in the MCPClient as we want to have MCP Client independent of Apify Actor
+ */
+export class ActorTokenCharger implements TokenCharger {
+    async chargeTokens(inputTokens: number, outputTokens: number, modelName: string): Promise<void> {
+        const eventNameInput = modelName === 'claude-3-5-haiku-latest'
+            ? Event.INPUT_TOKENS_HAIKU_3_5
+            : Event.INPUT_TOKENS_SONNET_3_7;
+        const eventNameOutput = modelName === 'claude-3-5-haiku-latest'
+            ? Event.OUTPUT_TOKENS_HAIKU_3_5
+            : Event.OUTPUT_TOKENS_SONNET_3_7;
+        try {
+            await Actor.charge({ eventName: eventNameInput, count: Math.ceil(inputTokens / 100) });
+            await Actor.charge({ eventName: eventNameOutput, count: Math.ceil(outputTokens / 100) });
+            log.info(`Charged ${inputTokens} input tokens (query+tools) and ${outputTokens} output tokens`);
+        } catch (error) {
+            log.error('Failed to charge for token usage', { error });
+            throw error;
+        }
+    }
+}
 
 // Add after Actor.init()
 const RUNNING_TIME_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -92,8 +115,6 @@ if (!input.llmProviderApiKey) {
 type SSEClient = { id: number; res: express.Response };
 let sseClients: SSEClient[] = [];
 let clientIdCounter = 0;
-let totalTokenUsageInput = 0;
-let totalTokenUsageOutput = 0;
 
 // Create a single instance of your MCP client (client is connected to the MCP-server)
 const client = new MCPClient(
@@ -105,6 +126,7 @@ const client = new MCPClient(
     input.modelMaxOutputTokens,
     input.maxNumberOfToolCallsPerQuery,
     input.toolCallTimeoutSec,
+    getChargeForTokens() ? new ActorTokenCharger() : null,
 );
 
 // 5) SSE endpoint for the client.js (browser)
@@ -150,40 +172,13 @@ app.post('/message', async (req, res) => {
     }
     try {
         // Process the query
-        const response = await client.processUserQuery(query, (role, content) => {
-            broadcastSSE({ role, content });
+        await Actor.pushData({ role: 'user', content: query });
+        await client.processUserQuery(query, async (role, content) => {
+            await broadcastSSE({ role, content });
         });
-        // accumulate token usage for the whole run
-        const inputTokens = response.usage?.input_tokens ?? 0;
-        const outputTokens = response.usage?.output_tokens ?? 0;
-        totalTokenUsageInput += inputTokens;
-        totalTokenUsageOutput += outputTokens;
-        log.debug(`[internal] Total token usage: ${totalTokenUsageInput} input, ${totalTokenUsageOutput} output`);
-
         // Charge for task completion
-        if (getChargeForTokens()) {
-            log.info(`Charging tokens usage with ${input.modelName} model`);
-            const eventNameInput = input.modelName === 'claude-3-5-haiku-latest' ? Event.INPUT_TOKENS_HAIKU_3_5 : Event.INPUT_TOKENS_SONNET_3_7;
-            const eventNameOutput = input.modelName === 'claude-3-5-haiku-latest' ? Event.OUTPUT_TOKENS_HAIKU_3_5 : Event.OUTPUT_TOKENS_SONNET_3_7;
-
-            await Actor.charge({ eventName: eventNameInput, count: Math.ceil(inputTokens / 100) });
-            await Actor.charge({ eventName: eventNameOutput, count: Math.ceil(outputTokens / 100) });
-            log.info(`Charged ${inputTokens} input tokens and ${outputTokens} output tokens`);
-        }
-
         await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
         log.info(`Charged query answered event`);
-
-        let text = '';
-        for (const item of response.content) {
-            if (item.type === 'text') {
-                text += (text ? '\n\n' : '') + (item.text || '');
-            } else if (item.type === 'tool_use') {
-                text += (text ? '\n\n' : '') + JSON.stringify(item.input);
-            }
-        }
-        await Actor.pushData({ query, response: text, responseObject: response });
-
         return res.json({ ok: true });
     } catch (err) {
         log.error(`Error in processing user query: ${err}, conversation: ${client.getConversation()}`);
@@ -256,18 +251,19 @@ app.post('/conversation/reset', (_req, res) => {
     res.json({ ok: true });
 });
 
+app.get('*', (_req, res) => {
+    res.sendFile(path.join(publicPath, 'index.html'));
+});
+
 /**
  * Broadcasts an event to all connected SSE clients
  */
-function broadcastSSE(data: object) {
+async function broadcastSSE(data: object) {
+    await Actor.pushData(data);
     for (const c of sseClients) {
         c.res.write(`data: ${JSON.stringify(data)}\n\n`);
     }
 }
-
-app.get('*', (_req, res) => {
-    res.sendFile(path.join(publicPath, 'index.html'));
-});
 
 app.listen(PORT, async () => {
     log.info(`Serving from path ${path.join(publicPath, 'index.html')}`);
