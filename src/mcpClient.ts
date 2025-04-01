@@ -151,22 +151,40 @@ export class MCPClient {
                 return response;
             } catch (error) {
                 lastError = error as Error;
-                // Handle retryable errors (429 and 529)
-                if (error instanceof Error && (error.message.includes('429') || error.message.includes('529'))) {
-                    if (attempt < maxRetries) {
-                        const delay = attempt * retryDelayMs;
-                        const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
-                        log.debug(`${errorType} hit, attempt ${attempt}/${maxRetries}. Retrying in ${delay / 1000} seconds...`);
-                        await new Promise((resolve) => {
-                            setTimeout(resolve, delay);
-                        });
-                        continue;
-                    } else {
-                        const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
-                        const errorMsg = errorType === 'Rate limit'
-                            ? `Rate limit exceeded after ${maxRetries} attempts. Please try again in a few minutes or consider switching to a different model`
-                            : 'Server is currently experiencing high load. Please try again in a few moments or consider switching to a different model.';
-                        throw new Error(errorMsg);
+                if (error instanceof Error) {
+                    if (error.message.includes('429') || error.message.includes('529')) {
+                        if (attempt < maxRetries) {
+                            const delay = attempt * retryDelayMs;
+                            const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
+                            log.debug(`${errorType} hit, attempt ${attempt}/${maxRetries}. Retrying in ${delay / 1000} seconds...`);
+                            await new Promise((resolve) => {
+                                setTimeout(resolve, delay);
+                            });
+                            continue;
+                        } else {
+                            const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
+                            const errorMsg = errorType === 'Rate limit'
+                                ? `Rate limit exceeded after ${maxRetries} attempts. Please try again in a few minutes or consider switching to a different model`
+                                : 'Server is currently experiencing high load. Please try again in a few moments or consider switching to a different model.';
+                            throw new Error(errorMsg);
+                        }
+                    }
+                    // Handle tool_use without tool_result blocks error
+                    if (error.message.includes('tool_use') && error.message.includes('without tool_result blocks')) {
+                        log.debug('Found tool_use without corresponding tool_result blocks, removing problematic message and retrying...');
+                        // Find the message with the specific tool_use ID
+                        const toolUseId = error.message.match(/toolu_[A-Za-z0-9]+/)?.[0];
+                        if (toolUseId) {
+                            const problematicIndex = messages.findIndex((msg) => {
+                                if (typeof msg.content === 'string') return false;
+                                return msg.content.some((block) => block.type === 'tool_use' && block.id === toolUseId);
+                            });
+
+                            if (problematicIndex !== -1) {
+                                messages.splice(problematicIndex, 1);
+                                continue;
+                            }
+                        }
                     }
                 }
                 // For other errors, throw immediately
@@ -202,7 +220,7 @@ export class MCPClient {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const params = { name: block.name, arguments: block.input as any };
                 log.debug(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
-                let results;
+                // Create the tool result message structure upfront
                 const msgUser = {
                     role: 'user' as const,
                     content: [{
@@ -213,7 +231,7 @@ export class MCPClient {
                     }],
                 };
                 try {
-                    results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
+                    const results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
                     if (results.content instanceof Array && results.content.length !== 0) {
                         const text = results.content.map((x) => x.text);
                         msgUser.content[0].content = text.join('\n\n');
@@ -222,11 +240,13 @@ export class MCPClient {
                         msgUser.content[0].is_error = true;
                     }
                 } catch (error) {
+                    log.error(`Error when calling tool ${params.name}: ${error}`);
                     msgUser.content[0].content = `Error when calling tool ${params.name}, error: ${error}`;
                     msgUser.content[0].is_error = true;
                 }
-                sseEmit(msgUser.role, msgUser.content);
+                // Always add the tool result to conversation and emit it
                 this.conversation.push(msgUser);
+                sseEmit(msgUser.role, msgUser.content);
                 // Get next response from Claude
                 log.debug('[internal] Get model response from tool result');
                 const nextResponse: Message = await this.createMessageWithRetry(this.conversation);
