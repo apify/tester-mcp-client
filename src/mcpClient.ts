@@ -190,6 +190,7 @@ export class MCPClient {
                     sseEmit('assistant', msg);
                     const finalResponse = await this.createMessageWithRetry(this.conversation);
                     this.conversation.push({ role: 'assistant', content: finalResponse.content || '' });
+                    sseEmit('assistant', finalResponse.content || '');
                     return;
                 }
                 const msgAssistant = {
@@ -242,7 +243,7 @@ export class MCPClient {
      * 2) If "tool_use" is present, call the main actor's tool via `this.mcpClient.callTool()`.
      * 3) Return or yield partial results so we can SSE them to the browser.
      */
-    async processUserQuery(query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void): Promise<Message> {
+    async processUserQuery(query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void) {
         await this.connectToServer(); // ensure connected
         log.debug(`[internal] User query: ${JSON.stringify(query)}`);
         this.conversation.push({ role: 'user', content: query });
@@ -252,7 +253,6 @@ export class MCPClient {
             log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
             log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
             await this.handleLLMResponse(response, sseEmit);
-            return response;
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.conversation.push({ role: 'assistant', content: errorMsg });
