@@ -17,7 +17,7 @@ const statusIcon = document.getElementById('statusIcon');
 function scrollToBottom() {
     // Scroll the chat log
     chatLog.scrollTop = chatLog.scrollHeight;
-    
+
     // Also scroll the window to ensure we're at the bottom
     window.scrollTo(0, document.body.scrollHeight);
 }
