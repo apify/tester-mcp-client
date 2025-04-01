@@ -13,32 +13,12 @@ const reconnectBtn = document.getElementById('reconnectBtn');
 const sendBtn = document.getElementById('sendBtn');
 const statusIcon = document.getElementById('statusIcon');
 
-// Scroll behavior state
-let shouldAutoScroll = true;
-let isScrolling = false;
-
-// Scroll event listener with debounce
-let scrollTimeout;
-chatLog.addEventListener('scroll', () => {
-    clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(() => {
-        const isAtBottom = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 50;
-        shouldAutoScroll = isAtBottom;
-    }, 100);
-});
-
-// Improved scrollToBottom function
+// Simple scroll to bottom function
 function scrollToBottom() {
-    if (!shouldAutoScroll || isScrolling) return;
-    isScrolling = true;
-    chatLog.scrollTo({
-        top: chatLog.scrollHeight,
-        behavior: 'smooth',
-    });
-    // Reset scrolling flag after animation
-    setTimeout(() => {
-        isScrolling = false;
-    }, 300);
+    const lastMessage = chatLog.lastElementChild;
+    if (lastMessage) {
+        lastMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
 }
 
 const messages = []; // Local message array for display only
@@ -273,6 +253,9 @@ function escapeHTML(str) {
 
 // ================== SENDING A USER QUERY (POST /message) ==================
 async function sendQuery(query) {
+    // First append the user message
+    appendMessage('user', query);
+
     // Create and show typing indicator
     const loadingRow = document.createElement('div');
     loadingRow.className = 'message-row';
@@ -286,11 +269,9 @@ async function sendQuery(query) {
         </div>
     `;
 
-    // First append the user message
-    appendMessage('user', query);
-
     // Then insert loading indicator as the last child of chatLog
     chatLog.appendChild(loadingRow);
+    // Force scroll after adding both message and loading indicator
     scrollToBottom();
 
     try {
