@@ -31,15 +31,18 @@
             background: var(--bg-color);
             color: var(--text-primary);
             line-height: 1.5;
+            min-height: 100vh;
+            padding-bottom: 80px;
         }
 
         #chatContainer {
             max-width: 1000px;
             margin: 1rem auto;
             padding: 0 1rem;
-            height: calc(100vh - 2rem);
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
+            height: auto;
         }
 
         .header {
@@ -64,7 +67,7 @@
         }
 
         details + details {
-            margin-top: -0.25rem; /* Reduce space between consecutive details */
+            margin-top: -0.25rem;
         }
 
         summary {
@@ -75,14 +78,14 @@
 
         #chatLog {
             flex: 1;
-            height: 0;
             background: var(--chat-bg);
             border: 1px solid var(--border-color);
             border-radius: 0.5rem;
             padding: 1rem;
-            overflow-y: auto;
             margin-bottom: 0.75rem;
             box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+            overflow-y: visible;
+            height: auto;
         }
 
         .message-row {
@@ -162,14 +165,18 @@
 
         #inputRow {
             gap: 0.5rem;
-            margin-top: 0.75rem;
-            margin-bottom: 0.5rem;
             display: grid;
             grid-template-columns: 1fr auto;
             align-items: center;
-            position: sticky;
+            position: fixed;
             bottom: 0;
+            left: 0;
+            right: 0;
             background: var(--bg-color);
+            padding: 0.5rem;
+            z-index: 100;
+            max-width: 1000px;
+            margin: 0.75rem auto 0.5rem;
         }
 
         #queryInput {
@@ -313,7 +320,6 @@
         /* Mobile responsiveness */
         @media (max-width: 640px) {
             #chatContainer {
-                height: calc(100vh - 1rem);
                 margin: 0.5rem auto;
             }
 
@@ -338,27 +344,32 @@
                 max-width: 100%;
             }
         }
+
+        /* Remove the hidden class since we want it always visible */
+        #inputRow.hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
 <div id="chatContainer">
     <div class="header">
         <h2>Tester MCP Client</h2>
-        <details>
-            <summary>🚀 Quick start guide</summary>
-            <div style="padding: 1rem 0;">
-                <h4>Example questions you can ask:</h4>
-                <ul style="padding-left: 1.5rem; margin-top: 0.5rem;">
-                    <li>"What are the most popular Actors for social media scraping?"</li>
-                    <li>"Show me how to use the Google Search Results Scraper"</li>
-                    <li>"Which Actor should I use to extract data from LinkedIn?"</li>
-                </ul>
-            </div>
-        </details>
     </div>
 
     <details>
-        <summary>Settings & Information</summary>
+        <summary>🚀 Quick start guide</summary>
+        <div style="padding: 1rem 0;">
+            <h4>Example questions you can ask:</h4>
+            <ul style="padding-left: 1.5rem; margin-top: 0.5rem;">
+                <li>"What are the most popular Actors for social media scraping?"</li>
+                <li>"Show me how to use the Google Search Results Scraper"</li>
+                <li>"Which Actor should I use to extract data from LinkedIn?"</li>
+            </ul>
+        </div>
+    </details>
+    <details>
+        <summary>🔧 Settings & Information</summary>
         <div style="padding: 1rem 0;">
             <pre id="clientInfo"></pre>
             <pre id="information"></pre>
