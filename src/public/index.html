@@ -384,6 +384,19 @@
             <div>MCP Server SSE URL: <span id="mcpSseUrl"></span></div>
         </div>
     </details>
+    
+    <details>
+        <summary>🧰 Available Tools <span id="toolsCount"></span></summary>
+        <div style="padding: 1rem 0;">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
+                <button id="refreshToolsBtn" style="padding: 0.5rem; font-size: 0.85rem;">
+                    🔄 Refresh Tools
+                </button>
+            </div>
+            <p id="toolsLoading">Tools will be loaded once connected</p>
+            <div id="availableTools"></div>
+        </div>
+    </details>
 
     <div class="status-bar">
         <div style="display: flex; align-items: center;">
@@ -415,6 +428,108 @@
         const newHeight = Math.min(this.scrollHeight, 150); // Cap at max-height
         this.style.height = newHeight + 'px';
     });
+
+    // Update the toolsLoading element to show the animated typing indicator
+    function showToolsLoading() {
+        toolsLoading.innerHTML = `
+            <div style="display: flex; align-items: center;">
+                Loading available tools
+                <div class="typing-indicator" style="margin-left: 0.25rem;">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            </div>
+        `;
+        toolsLoading.style.display = 'block';
+    }
+
+    // Fetch and display available tools
+    const toolsContainer = document.getElementById('availableTools');
+    const toolsLoading = document.getElementById('toolsLoading');
+    
+    // Fetch available tools
+    async function fetchAvailableTools() {
+        showToolsLoading();
+        
+        try {
+            const response = await fetch('/available-tools');
+            const data = await response.json();
+            
+            if (data.tools && data.tools.length > 0) {
+                toolsLoading.style.display = 'none';
+                renderTools(data.tools);
+            } else {
+                toolsLoading.textContent = 'No tools available.';
+            }
+        } catch (err) {
+            toolsLoading.textContent = 'Failed to load tools. Try reconnecting.';
+            console.error('Error fetching tools:', err);
+        }
+    }
+    
+    // Render the tools list
+    function renderTools(tools) {
+        toolsContainer.innerHTML = '';
+        
+        // Change the tools count
+        const toolsCountElement = document.getElementById('toolsCount');
+        toolsCountElement.textContent = `(${tools.length})`;
+        
+        // Expandable list of tools
+        const toolsList = document.createElement('ul');
+        toolsList.style.paddingLeft = '1.5rem';
+        toolsList.style.marginTop = '0.5rem';
+        
+        tools.forEach(tool => {
+            const li = document.createElement('li');
+            li.style.marginBottom = '0.75rem';
+            
+            const toolName = document.createElement('strong');
+            toolName.textContent = tool.name;
+            li.appendChild(toolName);
+            
+            if (tool.description) {
+                const description = document.createElement('div');
+                description.style.fontSize = '0.85rem';
+                description.style.marginTop = '0.25rem';
+                description.textContent = tool.description;
+                li.appendChild(description);
+            }
+            
+            toolsList.appendChild(li);
+        });
+        
+        toolsContainer.appendChild(toolsList);
+    }
+    
+    // Fetch tools when connection is established
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initial connection status check will trigger the tools fetch
+        const checkToolsInterval = setInterval(() => {
+            const status = mcpServerStatus.textContent;
+            if (status === 'Connected') {
+                fetchAvailableTools();
+                clearInterval(checkToolsInterval);
+            }
+        }, 1000);
+    });
+    
+    // Add tools refresh when reconnecting
+    reconnectBtn.addEventListener('click', () => {
+        showToolsLoading();
+        toolsContainer.innerHTML = '';
+        document.getElementById('toolsCount').textContent = '';
+    });
+
+    // Manual refresh button
+    document.getElementById('refreshToolsBtn').addEventListener('click', () => {
+        showToolsLoading();
+        toolsContainer.innerHTML = '';
+        document.getElementById('toolsCount').textContent = '';
+        fetchAvailableTools();
+    });
+
 </script>
 </body>
 </html>

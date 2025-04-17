@@ -128,6 +128,10 @@ export class MCPClient {
         log.debug(`Connected to server with tools: ${this.tools.map((x) => x.name)}`);
     }
 
+    getTools() {
+        return this.tools;
+    }
+
     private async createMessageWithRetry(
         messages: MessageParam[],
         maxRetries = 3,

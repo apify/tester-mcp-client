@@ -251,6 +251,22 @@ app.post('/conversation/reset', (_req, res) => {
     res.json({ ok: true });
 });
 
+/**
+ * GET /available-tools endpoint to fetch available tools
+ */
+app.get('/available-tools', async (_req, res) => {
+    try {
+        await client.connectToServer(); // Ensure connected
+        await client.updateTools(); // Refresh tools
+        
+        const tools = client.getTools ? client.getTools() : [];
+        res.json({ tools });
+    } catch (err) {
+        log.error(`Error fetching tools: ${err}`);
+        res.status(500).json({ error: 'Failed to fetch tools' });
+    }
+});
+
 app.get('*', (_req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
