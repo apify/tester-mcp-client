@@ -1,7 +1,7 @@
 import inputSchema from '../.actor/input_schema.json' with { type: 'json' };
 
 export const defaults = {
-    mcpSseUrl: inputSchema.properties.mcpSseUrl.default,
+    mcpUrl: inputSchema.properties.mcpUrl.default,
     systemPrompt: inputSchema.properties.systemPrompt.default,
     modelName: inputSchema.properties.modelName.default,
     modelMaxOutputTokens: inputSchema.properties.modelMaxOutputTokens.default,
