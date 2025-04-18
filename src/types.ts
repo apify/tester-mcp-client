@@ -4,13 +4,22 @@ export type Input = {
     headers: Record<string, string>,
     maxNumberOfToolCallsPerQuery: number,
     modelMaxOutputTokens: number,
+    /**
+     * @deprecated MCP Use mcpUrl instead
+     */
     mcpSseUrl: string,
+    mcpUrl: string,
+    mcpTransportType: 'sse' | 'http-streamable-json-response',
     systemPrompt: string,
     toolCallTimeoutSec: number,
 };
 
 export type StandbyInput = Input & {
+    /**
+     * @deprecated MCP Use mcpUrl instead
+     */
     mcpSseUrl: string,
+    mcpUrl: string,
     headers: string | Record<string, string>,
 }
 

@@ -16,19 +16,33 @@ export function getChargeForTokens() {
 export function processInput(originalInput: Partial<Input> | Partial<StandbyInput>): Input {
     const input = { ...defaults, ...originalInput } as StandbyInput;
 
-    if (!input.mcpSseUrl) {
-        throw new Error(`MCP Server SSE URL is not provided. ${MISSING_PARAMETER_ERROR}: 'mcpSseUrl'`);
+    // MCP SSE URL is deprecated, use MCP URL instead
+    if (input.mcpSseUrl && !input.mcpUrl) {
+        input.mcpUrl = input.mcpSseUrl;
+    }
+    if (!input.mcpUrl) {
+        throw new Error(`MCP Server URL is not provided. ${MISSING_PARAMETER_ERROR}: 'mcpUrl'`);
     }
 
-    if (!(input.mcpSseUrl.includes('/sse'))) {
-        throw new Error(`MCP Server SSE URL is invalid. Provide SSE endpoint with /sse path.`);
+    if (input.mcpTransportType === 'http-streamable-json-response' && input.mcpUrl.includes('/sse')) {
+        throw new Error(`MCP URL includes /sse path, but the transport is set to 'http-streamable'. This is very likely a mistake.`);
+    }
+
+    if (input.mcpUrl.includes('/sse')) {
+        input.mcpTransportType = 'sse';
+    } else {
+        input.mcpTransportType = 'http-streamable-json-response';
     }
 
     if (!input.headers) {
         input.headers = {};
     }
     if (input.headers && typeof input.headers === 'string') {
-        input.headers = JSON.parse(input.headers);
+        try {
+            input.headers = JSON.parse(input.headers);
+        } catch (error) {
+            throw new Error(`Invalid JSON string in headers: ${(error as Error).message}`);
+        }
     }
     // Automatically add APIFY_TOKEN to Authorization header (if not present)
     if (typeof input.headers === 'object' && !('Authorization' in input.headers) && process.env.APIFY_TOKEN) {
@@ -40,10 +54,10 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
     }
 
     if (input.llmProviderApiKey && input.llmProviderApiKey !== '') {
-        log.info('Using user provided API key for LLM provider');
+        log.info('Using user provided API key for an LLM provider');
         isChargingForTokens = false;
     } else {
-        log.info('No API key provided for LLM provider, Actor will charge for tokens usage');
+        log.info('No API key provided for an LLM provider, Actor will charge for tokens usage');
         input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
     }
     return input as Input;

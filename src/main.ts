@@ -11,15 +11,17 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { Actor } from 'apify';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 
+import { createClient } from './clientFactory.js';
 import { BASIC_INFORMATION, Event } from './const.js';
+import { ConversationManager } from './conversationManager.js';
 import { processInput, getChargeForTokens } from './input.js';
 import { log } from './logger.js';
-import { MCPClient } from './mcpClient.js';
 import type { TokenCharger, Input } from './types.js';
 
 await Actor.init();
@@ -51,7 +53,7 @@ export class ActorTokenCharger implements TokenCharger {
 const RUNNING_TIME_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 setInterval(async () => {
     try {
-        log.info(`Charging for running time (every 5 minutes)`);
+        log.info('Charging for running time (every 5 minutes)');
         await Actor.charge({ eventName: Event.ACTOR_RUNNING_TIME });
     } catch (error) {
         log.error('Failed to charge for running time', { error });
@@ -59,8 +61,7 @@ setInterval(async () => {
 }, RUNNING_TIME_INTERVAL);
 
 try {
-    // Charge for memory usage on start
-    log.info(`Charging Actor start event.`);
+    log.info('Charging Actor start event.');
     await Actor.charge({ eventName: Event.ACTOR_STARTED });
 } catch (error) {
     log.error('Failed to charge for actor start event', { error });
@@ -80,7 +81,7 @@ if (ACTOR_IS_AT_HOME) {
     const dirname = path.dirname(filename);
     dotenv.config({ path: path.resolve(dirname, '../.env') });
     HOST = 'http://localhost';
-    PORT = '3000';
+    PORT = '5001';
 }
 
 // Add near the top after Actor.init()
@@ -101,9 +102,12 @@ const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
-const input = processInput((await Actor.getInput<Partial<Input>>()) ?? ({} as Input));
+const actorInput = (await Actor.getInput<Partial<Input>>()) ?? ({} as Input);
+const input = processInput(actorInput ?? ({} as Input));
+
 log.debug(`systemPrompt: ${input.systemPrompt}`);
-log.debug(`mcpSseUrl: ${input.mcpSseUrl}`);
+log.debug(`mcpUrl: ${input.mcpUrl}`);
+log.debug(`mcpTransport: ${input.mcpTransportType}`);
 log.debug(`modelName: ${input.modelName}`);
 
 if (!input.llmProviderApiKey) {
@@ -111,15 +115,14 @@ if (!input.llmProviderApiKey) {
     await Actor.exit('No API key provided for LLM provider. Report this issue to Actor developer.');
 }
 
-// 4) We'll store the SSE clients (browsers) in an array
-type SSEClient = { id: number; res: express.Response };
-let sseClients: SSEClient[] = [];
-let clientIdCounter = 0;
+// Only one browser client can be connected at a time
+type BrowserSSEClient = { id: number; res: express.Response };
+let browserClient: BrowserSSEClient | null = null;
 
 // Create a single instance of your MCP client (client is connected to the MCP-server)
-const client = new MCPClient(
-    input.mcpSseUrl,
-    input.headers,
+let client: Client | null = null;
+
+const conversationManager = new ConversationManager(
     input.systemPrompt,
     input.modelName,
     input.llmProviderApiKey,
@@ -130,7 +133,14 @@ const client = new MCPClient(
 );
 
 // 5) SSE endpoint for the client.js (browser)
-app.get('/sse', (req, res) => {
+app.get('/sse', async (req, res) => {
+    // Disconnect any existing client
+    if (browserClient) {
+        const message = 'Only one browser client can be connected at a time. Disconnected. '
+            + 'This typically happens when you reload the page or have multiple tabs open.';
+        log.warning(message);
+        browserClient.res.end();
+    }
     // Required headers for SSE
     res.set({
         'Content-Type': 'text/event-stream',
@@ -140,48 +150,64 @@ app.get('/sse', (req, res) => {
     });
     res.flushHeaders();
 
-    const clientId = ++clientIdCounter;
     const keepAliveInterval = setInterval(() => {
         res.write(':\n\n'); // Send a comment as a keepalive
     }, 5000); // Send keepalive every 5 seconds
 
-    sseClients.push({ id: clientId, res });
-    log.debug(`New SSE client: ${clientId}`);
-
-    // If client closes connection, remove from array and clear interval
+    browserClient = { id: 1, res };
+    log.debug('Browser client connected');
+    // If client closes connection, clear interval
     req.on('close', () => {
-        log.debug(`SSE client disconnected: ${clientId}`);
+        log.debug('Browser client disconnected');
         clearInterval(keepAliveInterval);
-        sseClients = sseClients.filter((c) => c.id !== clientId);
+        browserClient = null;
     });
 
     // Handle client timeout
     req.on('timeout', () => {
-        log.debug(`SSE client timeout: ${clientId}`);
+        log.debug('Browser client timeout');
         clearInterval(keepAliveInterval);
-        sseClients = sseClients.filter((c) => c.id !== clientId);
+        browserClient = null;
         res.end();
     });
 });
 
-// 6) POST /message from the browser to server
+// /message endpoint for the client.js (browser)
 app.post('/message', async (req, res) => {
     const { query } = req.body;
-    if (!query) {
-        return res.status(400).json({ error: 'Missing "query" field' });
-    }
+    if (!query) return res.status(400).json({ error: 'Missing "query" field' });
+
     try {
         // Process the query
         await Actor.pushData({ role: 'user', content: query });
-        await client.processUserQuery(query, async (role, content) => {
-            await broadcastSSE({ role, content });
-        });
+        if (!client) {
+            client = await createClient(
+                input.mcpUrl,
+                input.mcpTransportType,
+                input.headers,
+                async (tools) => await conversationManager.handleToolUpdate(tools),
+                (notification) => conversationManager.handleNotification(notification),
+            );
+        }
+        if (client) {
+            await conversationManager.processUserQuery(client, query, async (role, content) => {
+                await broadcastSSE({ role, content });
+            });
+        } else {
+            await broadcastSSE({ message: 'MCP client is not connected' });
+        }
         // Charge for task completion
         await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
         log.info(`Charged query answered event`);
+
+        // close connection if mcpTransport is http-streamable-json-response
+        if (input.mcpTransportType === 'http-streamable-json-response') {
+            await client.close();
+            client = null;
+        }
         return res.json({ ok: true });
     } catch (err) {
-        log.error(`Error in processing user query: ${err}, conversation: ${client.getConversation()}`);
+        log.exception(err as Error, `Error in processing user query: ${query}`);
         return res.json({ error: (err as Error).message });
     }
 });
@@ -189,25 +215,27 @@ app.post('/message', async (req, res) => {
 /**
  * Periodically check if the main server is still reachable.
  */
-app.get('/pingMcpServer', async (_req, res) => {
-    try {
-        // Attempt to ping the main MCP server
-        const response = await client.isConnected();
-        res.json({ status: response });
-    } catch (err) {
-        res.json({ status: 'Not connected', error: (err as Error).message });
+app.get('/ping-mcp-server', async (_req, res) => {
+    if (!client) {
+        client = await createClient(
+            input.mcpUrl,
+            input.mcpTransportType,
+            input.headers,
+            async (tools) => await conversationManager.handleToolUpdate(tools),
+            (notification) => conversationManager.handleNotification(notification),
+        );
     }
-});
-
-app.post('/reconnect', async (_req, res) => {
+    if (!client) return 'Client not connected';
     try {
-        log.debug('Reconnecting to main server');
-        await client.connectToServer();
-        const response = await client.isConnected();
-        res.json({ status: response });
+        await client.ping();
+        return res.json({ status: 'OK' });
     } catch (err) {
-        log.error(`Error reconnecting to main server: ${err}`);
-        res.json({ status: 'Not connected', error: (err as Error).message });
+        return res.json({ status: 'Not connected', error: (err as Error).message });
+    } finally {
+        if (input.mcpTransportType === 'http-streamable-json-response') {
+            await client.close();
+            client = null;
+        }
     }
 });
 
@@ -216,7 +244,8 @@ app.post('/reconnect', async (_req, res) => {
  */
 app.get('/client-info', (_req, res) => {
     res.json({
-        mcpSseUrl: input.mcpSseUrl,
+        mcpUrl: input.mcpUrl,
+        mcpTransportType: input.mcpTransportType,
         systemPrompt: input.systemPrompt,
         modelName: input.modelName,
         publicUrl,
@@ -225,7 +254,7 @@ app.get('/client-info', (_req, res) => {
 });
 
 /**
- * GET /check-timeout endpoint to check if the actor is about to timeout
+ * GET /check-timeout endpoint to check if the Actor is about to timeout
  */
 app.get('/check-actor-timeout', (_req, res) => {
     if (!ACTOR_TIMEOUT_AT) {
@@ -247,7 +276,7 @@ app.get('/check-actor-timeout', (_req, res) => {
  * POST /conversation/reset to reset the conversation
  */
 app.post('/conversation/reset', (_req, res) => {
-    client.resetConversation();
+    conversationManager.resetConversation();
     res.json({ ok: true });
 });
 
@@ -259,15 +288,16 @@ app.get('*', (_req, res) => {
  * Broadcasts an event to all connected SSE clients
  */
 async function broadcastSSE(data: object) {
+    log.debug('Push data into Apify dataset');
     await Actor.pushData(data);
-    for (const c of sseClients) {
-        c.res.write(`data: ${JSON.stringify(data)}\n\n`);
-    }
+
+    log.debug('Broadcasting message to client');
+    if (browserClient) browserClient.res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 app.listen(PORT, async () => {
-    log.info(`Serving from path ${path.join(publicPath, 'index.html')}`);
-    const msg = `Navigate to ${publicUrl} to interact with chat-ui interface.`;
+    log.info(`Serving from ${path.join(publicPath, 'index.html')}`);
+    const msg = `Navigate to ${publicUrl} to interact with the chat UI.`;
     log.info(msg);
     await Actor.pushData({ content: msg, role: publicUrl });
 });

@@ -5,9 +5,9 @@
 
 import { Anthropic } from '@anthropic-ai/sdk';
 import type { Message, MessageParam, ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
-import { CallToolResultSchema, ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { ListToolsResult, Notification } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
@@ -17,28 +17,18 @@ if (typeof globalThis.EventSource === 'undefined') {
     globalThis.EventSource = EventSource as unknown as typeof globalThis.EventSource;
 }
 
-export class MCPClient {
+export class ConversationManager {
     private conversation: MessageParam[] = [];
-    private _isConnected = false;
     private anthropic: Anthropic;
-    private readonly serverUrl: string;
-    private readonly customHeaders: Record<string, string> | null;
     private readonly systemPrompt: string;
     private readonly modelName: string;
     private readonly modelMaxOutputTokens: number;
     private readonly maxNumberOfToolCallsPerQuery: number;
     private readonly toolCallTimeoutSec: number;
     private readonly tokenCharger: TokenCharger | null;
-    private client = new Client(
-        { name: 'example-client', version: '0.1.0' },
-        { capabilities: {} },
-    );
-
     private tools: Tool[] = [];
 
     constructor(
-        serverUrl: string,
-        headers: Record<string, string> | null,
         systemPrompt: string,
         modelName: string,
         apiKey: string,
@@ -47,9 +37,7 @@ export class MCPClient {
         toolCallTimeoutSec: number,
         tokenCharger: TokenCharger | null = null,
     ) {
-        this.serverUrl = serverUrl;
         this.systemPrompt = systemPrompt;
-        this.customHeaders = headers;
         this.modelName = modelName;
         this.modelMaxOutputTokens = modelMaxOutputTokens;
         this.maxNumberOfToolCallsPerQuery = maxNumberOfToolCallsPerQuery;
@@ -58,69 +46,12 @@ export class MCPClient {
         this.anthropic = new Anthropic({ apiKey });
     }
 
-    /**
-     * Start the server using node and provided server script path.
-     * Connect to the server using stdio transport and list available tools.
-     */
-    async connectToServer() {
-        if (this._isConnected) return;
-        const { customHeaders } = this;
-        const transport = new SSEClientTransport(
-            new URL(this.serverUrl),
-            {
-                requestInit: { headers: this.customHeaders || undefined },
-                eventSourceInit: {
-                    // The EventSource package augments EventSourceInit with a "fetch" parameter.
-                    // You can use this to set additional headers on the outgoing request.
-                    // Based on this example: https://github.com/modelcontextprotocol/typescript-sdk/issues/118
-                    async fetch(input: Request | URL | string, init?: RequestInit) {
-                        const headers = new Headers({ ...(init?.headers || {}), ...customHeaders });
-                        return fetch(input, { ...init, headers });
-                    },
-                    // We have to cast to "any" to use it, since it's non-standard
-                } as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-            },
-        );
-        await this.client.connect(transport);
-        await this.updateTools();
-        await this.setNotifications();
-    }
-
-    async setNotifications() {
-        this.client.setNotificationHandler(
-            ToolListChangedNotificationSchema,
-            async () => {
-                log.debug('Received notification that tools list changed, refreshing...');
-                await this.updateTools();
-            },
-        );
-    }
-
-    async isConnected() {
-        try {
-            await this.client.ping();
-            this._isConnected = true;
-            return 'OK';
-        } catch (error) {
-            this._isConnected = false;
-            if (error instanceof Error) {
-                return error.message;
-            }
-            return String(error);
-        }
-    }
-
-    getConversation() {
-        return this.conversation;
-    }
-
     resetConversation() {
         this.conversation = [];
     }
 
-    async updateTools() {
-        const response = await this.client.listTools();
-        this.tools = response.tools.map((x) => ({
+    async handleToolUpdate(listTools: ListToolsResult) {
+        this.tools = listTools.tools.map((x) => ({
             name: x.name,
             description: x.description,
             input_schema: x.inputSchema,
@@ -194,7 +125,7 @@ export class MCPClient {
         throw lastError;
     }
 
-    async handleLLMResponse(response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCount = 0) {
+    async handleLLMResponse(client: Client, response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCount = 0) {
         for (const block of response.content) {
             if (block.type === 'text') {
                 this.conversation.push({ role: 'assistant', content: block.text || '' });
@@ -231,7 +162,7 @@ export class MCPClient {
                     }],
                 };
                 try {
-                    const results = await this.client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
+                    const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
                     if (results.content instanceof Array && results.content.length !== 0) {
                         const text = results.content.map((x) => x.text);
                         msgUser.content[0].content = text.join('\n\n');
@@ -244,14 +175,14 @@ export class MCPClient {
                     msgUser.content[0].content = `Error when calling tool ${params.name}, error: ${error}`;
                     msgUser.content[0].is_error = true;
                 }
-                // Always add the tool result to conversation and emit it
+                // Always add the tool result to the conversation and emit it
                 this.conversation.push(msgUser);
                 sseEmit(msgUser.role, msgUser.content);
                 // Get next response from Claude
                 log.debug('[internal] Get model response from tool result');
                 const nextResponse: Message = await this.createMessageWithRetry(this.conversation);
                 log.debug('[internal] Received response from model');
-                await this.handleLLMResponse(nextResponse, sseEmit, toolCallCount + 1);
+                await this.handleLLMResponse(client, nextResponse, sseEmit, toolCallCount + 1);
                 log.debug('[internal] Finished processing tool result');
             }
         }
@@ -263,21 +194,26 @@ export class MCPClient {
      * 2) If "tool_use" is present, call the main actor's tool via `this.mcpClient.callTool()`.
      * 3) Return or yield partial results so we can SSE them to the browser.
      */
-    async processUserQuery(query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void) {
-        await this.connectToServer(); // ensure connected
-        log.debug(`[internal] User query: ${JSON.stringify(query)}`);
+    async processUserQuery(client: Client, query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void) {
+        log.debug(`[internal] Call LLM with user query: ${JSON.stringify(query)}`);
         this.conversation.push({ role: 'user', content: query });
 
         try {
             const response = await this.createMessageWithRetry(this.conversation);
             log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
             log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
-            await this.handleLLMResponse(response, sseEmit);
+            await this.handleLLMResponse(client, response, sseEmit);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             this.conversation.push({ role: 'assistant', content: errorMsg });
             sseEmit('assistant', errorMsg);
             throw new Error(errorMsg);
         }
+    }
+
+    handleNotification(notification: Notification) {
+        // Implement logic to handle the notification
+        log.info(`Handling notification: ${JSON.stringify(notification)}`);
+        // You can update the conversation or perform other actions based on the notification
     }
 }

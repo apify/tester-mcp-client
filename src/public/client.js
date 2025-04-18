@@ -6,12 +6,10 @@ const chatLog = document.getElementById('chatLog');
 const clearBtn = document.getElementById('clearBtn');
 const clientInfo = document.getElementById('clientInfo');
 const information = document.getElementById('information');
-const mcpServerStatus = document.getElementById('mcpServerStatus');
-const mcpSseUrl = document.getElementById('mcpSseUrl');
+const mcpUrl = document.getElementById('mcpSseUrl');
 const queryInput = document.getElementById('queryInput');
-const reconnectBtn = document.getElementById('reconnectBtn');
 const sendBtn = document.getElementById('sendBtn');
-const statusIcon = document.getElementById('statusIcon');
+const pingMcpServerBtn = document.getElementById('pingMcpServerBtn');
 
 // Simple scroll to bottom function
 function scrollToBottom() {
@@ -23,28 +21,15 @@ function scrollToBottom() {
 }
 
 const messages = []; // Local message array for display only
-const actorTimeoutCheckDelay = 60000; // 60 seconds between checks
+const actorTimeoutCheckDelay = 60_000; // 60 seconds between checks
 let timeoutCheckInterval = null; // Will store the interval ID
-
-let connectionAttempts = 0;
-const maxAttempts = 12; // Try for up to 2 minutes (12 * 10 seconds)
-const retryDelay = 10000; // 10 seconds between attempts
-const regularCheckDelay = 30000; // 30 seconds between checks
-const sseReconnectDelay = 2000; // 2 seconds before reconnecting
-
-// Add status message constants
-const STATUS = {
-    CONNECTED: 'Connected',
-    CONNECTING: 'Connecting',
-    FAILED: 'Connection failed',
-    FAILED_TIMEOUT: 'Failed to connect after multiple attempts',
-};
+const sseReconnectDelay = 10_000; // 10 seconds before reconnecting
 
 // ================== SSE CONNECTION SETUP ==================
 let eventSource = new EventSource('/sse');
 
-// Handle incoming SSE messages
-eventSource.onmessage = (event) => {
+// Function to handle incoming SSE messages
+function handleSSEMessage(event) {
     let data;
     try {
         data = JSON.parse(event.data);
@@ -52,39 +37,39 @@ eventSource.onmessage = (event) => {
         console.warn('Could not parse SSE event as JSON:', event.data);
         return;
     }
-    // data = { role, content }
     appendMessage(data.role, data.content);
-};
+}
 
-// Handle SSE errors
-eventSource.onerror = (err) => {
+// Function to handle SSE errors
+function handleSSEError(err) {
     console.error('SSE error:', err);
-    const errorMessage = err instanceof Error ? err.message : 'Connection lost. Attempting to reconnect...';
+    const errorMessage = err instanceof Error ? err.message : 'Connection lost from Browser to MCP-tester-client server. Attempting to reconnect...';
+    console.log(errorMessage);
     appendMessage('internal', errorMessage);
 
     // Close the current connection
     eventSource.close();
 
     // Attempt to reconnect after a delay
-    setTimeout(reconnectSSE, sseReconnectDelay); // Wait 2 seconds before reconnecting
-};
+    setTimeout(reconnectSSE, sseReconnectDelay);
+}
 
-// Reconnection logic extracted into a separate function
+eventSource.onmessage = handleSSEMessage;
+eventSource.onerror = handleSSEError;
+
 function reconnectSSE() {
-    console.log('Attempting to reconnect SSE...');
     const newEventSource = new EventSource('/sse');
 
     newEventSource.onopen = () => {
-        console.log('SSE reconnected successfully');
         appendMessage('internal', 'Connection restored!');
         eventSource = newEventSource; // Update the global eventSource reference
 
-        // Reattach message handler
-        newEventSource.onmessage = eventSource.onmessage;
-        newEventSource.onerror = eventSource.onerror;
+        // Reattach message and error handlers
+        eventSource.onmessage = handleSSEMessage;
+        eventSource.onerror = handleSSEError;
     };
 
-    newEventSource.onerror = eventSource.onerror; // Reuse the same error handler
+    newEventSource.onerror = handleSSEError; // Reuse the same error handler
 }
 
 // ================== ON PAGE LOAD (DOMContentLoaded) ==================
@@ -97,15 +82,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const resp = await fetch('/client-info');
         const data = await resp.json();
-        if (mcpSseUrl) mcpSseUrl.textContent = data.mcpSseUrl;
+        if (mcpUrl) mcpUrl.textContent = data.mcpUrl;
         if (clientInfo) clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
         if (information) information.innerHTML = `${data.information}`;
     } catch (err) {
         console.error('Error fetching client info:', err);
     }
-
-    // Start connection attempt loop
-    await attemptConnection(true);
 
     // Add this near the DOMContentLoaded event listener
     window.addEventListener('beforeunload', async () => {
@@ -123,9 +105,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Error resetting conversation on page reload:', err);
         }
     });
+
+    // Call ping on a page load
+    await pingMcpServer();
 });
 
-// ================== 4) MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
+// ================== MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
 
 /**
  * appendMessage(role, content):
@@ -313,89 +298,6 @@ clearBtn.addEventListener('click', async () => {
     }
 });
 
-// ================== SERVER CONNECTIVITY CHECKS & RECONNECT LOGIC ==================
-
-async function attemptConnection(isInitial = false) {
-    if (isInitial) {
-        if (connectionAttempts >= maxAttempts) {
-            updateMcpServerStatus(STATUS.FAILED);
-            appendMessage('internal', `${STATUS.FAILED_TIMEOUT}. Please try reconnecting manually.`);
-            return;
-        }
-        connectionAttempts++;
-        updateMcpServerStatus(STATUS.CONNECTING);
-        // Add attempt counter inline with smaller font
-        const attemptText = document.createElement('small');
-        attemptText.style.cssText = `
-            margin-left: 0.25rem;
-            opacity: 0.7;
-            font-size: 0.8em;
-            white-space: nowrap;
-            display: inline-block;
-        `;
-        attemptText.textContent = `(${connectionAttempts}/${maxAttempts})`;
-        mcpServerStatus.firstElementChild.appendChild(attemptText);
-    }
-
-    try {
-        const resp = await fetch('/pingMcpServer');
-        const data = await resp.json();
-
-        if (data.status === true || data.status === 'OK') {
-            updateMcpServerStatus(STATUS.CONNECTED);
-            if (isInitial) {
-                appendMessage('internal', 'Successfully connected to MCP server!');
-                startRegularChecks();
-            }
-        } else {
-            updateMcpServerStatus(STATUS.CONNECTING);
-            await fetch('/reconnect', { method: 'POST' });
-            if (isInitial) {
-                setTimeout(() => attemptConnection(true), retryDelay);
-            }
-        }
-    } catch (err) {
-        console.error('Connection attempt failed:', err);
-        updateMcpServerStatus(STATUS.FAILED);
-        if (isInitial) {
-            setTimeout(() => attemptConnection(true), retryDelay);
-        }
-    }
-}
-
-function updateMcpServerStatus(status) {
-    const isOk = status === true || status === 'OK' || status === STATUS.CONNECTED;
-    if (isOk) {
-        statusIcon.style.backgroundColor = '#22c55e'; // green-500
-        mcpServerStatus.innerHTML = STATUS.CONNECTED;
-    } else if (status === STATUS.CONNECTING) {
-        statusIcon.style.backgroundColor = '#f97316'; // orange-500
-        mcpServerStatus.innerHTML = `
-            <div style="display: flex; align-items: center; white-space: nowrap;">
-                ${STATUS.CONNECTING}
-                <div class="typing-indicator" style="margin-left: 0.25rem;">
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                </div>
-            </div>
-        `;
-    } else {
-        statusIcon.style.backgroundColor = '#ef4444'; // red-500
-        mcpServerStatus.innerHTML = status;
-    }
-}
-
-function startRegularChecks() {
-    setInterval(() => attemptConnection(false), regularCheckDelay);
-}
-
-// Manual reconnect button
-reconnectBtn.addEventListener('click', async () => {
-    connectionAttempts = 0;
-    await attemptConnection(true);
-});
-
 // Add this new function near other utility functions
 async function checkActorTimeout() {
     try {
@@ -438,4 +340,24 @@ queryInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         sendBtn.click();
     }
+});
+
+// Add ping function
+async function pingMcpServer() {
+    try {
+        const resp = await fetch('/ping-mcp-server');
+        const data = await resp.json();
+        if (data.status === true || data.status === 'OK') {
+            appendMessage('internal', 'Successfully connected');
+        } else {
+            appendMessage('internal', 'Failed to connect');
+        }
+    } catch (err) {
+        appendMessage('internal', `Error pinging MCP server: ${err.message}`);
+    }
+}
+
+// Add click handler for reconnect button
+pingMcpServerBtn.addEventListener('click', async () => {
+    await pingMcpServer();
 });
