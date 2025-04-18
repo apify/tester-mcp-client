@@ -76,7 +76,7 @@ function reconnectSSE() {
 //  - Fetch client info
 //  - Set up everything else
 
-// Initial connection on page load
+// Initial connection on a page load
 document.addEventListener('DOMContentLoaded', async () => {
     // Fetch client info first
     try {
@@ -169,26 +169,68 @@ function appendToolBlock(item) {
     container.className = 'tool-block';
 
     if (item.type === 'tool_use') {
+        const inputContent = item.input ? formatAnyContent(item.input) : '<em>No input provided</em>';
         container.innerHTML = `
-<details>
-  <summary>Tool use: <strong>${item.name}</strong></summary>
-  <div style="font-size: 0.875rem; margin: 0.5rem 0;">
-    <strong>ID:</strong> ${item.id || 'unknown'}
+<details class="tool-details">
+  <summary>
+    <div class="tool-header">
+      <div class="tool-icon">
+        <i class="fas fa-tools"></i>
+      </div>
+      <div class="tool-info">
+        <div class="tool-name">${item.name || 'Unknown Tool'}</div>
+        <div class="tool-id">ID: ${item.id || 'unknown'}</div>
+      </div>
+      <div class="tool-status">
+        <i class="fas fa-chevron-down"></i>
+      </div>
+    </div>
+  </summary>
+  <div class="tool-content">
+    <div class="tool-input">
+      <div class="tool-label">Input:</div>
+      ${inputContent}
+    </div>
   </div>
-  ${formatAnyContent(item.input)}
 </details>`;
     } else if (item.type === 'tool_result') {
-        const summary = item.is_error ? 'Tool result (Error)' : 'Tool result';
+        const resultContent = item.content ? formatAnyContent(item.content) : '<em>No result available</em>';
         container.innerHTML = `
-<details>
-  <summary>${summary}</summary>
-  ${formatAnyContent(item.content)}
+<details class="tool-details">
+  <summary>
+    <div class="tool-header">
+      <div class="tool-icon">
+        <i class="fas fa-code-branch"></i>
+      </div>
+      <div class="tool-info">
+        <div class="tool-name">Tool Result</div>
+      </div>
+      <div class="tool-status">
+        <i class="fas fa-chevron-down"></i>
+      </div>
+    </div>
+  </summary>
+  <div class="tool-content">
+    <div class="tool-result">
+      <div class="tool-label">${item.is_error ? 'Error Details:' : 'Result:'}</div>
+      ${resultContent}
+    </div>
+  </div>
 </details>`;
     }
 
     row.appendChild(container);
     chatLog.appendChild(row);
     scrollToBottom();
+
+    // Add click handler for the chevron icon
+    const chevron = container.querySelector('.fa-chevron-down');
+    if (chevron) {
+        const details = container.querySelector('details');
+        details.addEventListener('toggle', () => {
+            chevron.style.transform = details.open ? 'rotate(180deg)' : 'rotate(0deg)';
+        });
+    }
 }
 
 // ================== UTILITY FOR FORMATTING CONTENT (JSON, MD, ETC.) ==================
@@ -246,7 +288,7 @@ async function sendQuery(query) {
     const loadingRow = document.createElement('div');
     loadingRow.className = 'message-row';
     loadingRow.innerHTML = `
-        <div class="bubble loading">
+        <div class="bubble assistant loading">
             <div class="typing-indicator">
                 <div class="typing-dot"></div>
                 <div class="typing-dot"></div>
@@ -255,9 +297,7 @@ async function sendQuery(query) {
         </div>
     `;
 
-    // Then insert loading indicator as the last child of chatLog
     chatLog.appendChild(loadingRow);
-    // Force scroll after adding both message and loading indicator
     scrollToBottom();
 
     try {
@@ -283,18 +323,30 @@ async function sendQuery(query) {
 // ================== CLEAR CONVERSATION LOG (POST /conversation/reset) ==================
 clearBtn.addEventListener('click', async () => {
     try {
+        // Add visual feedback
+        clearBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        clearBtn.disabled = true;
+
         messages.length = 0;
         chatLog.innerHTML = '';
 
         const resp = await fetch('/conversation/reset', { method: 'POST' });
         const data = await resp.json();
+
         if (data.error) {
             console.error('Server error when resetting conversation:', data.error);
+            appendMessage('internal', 'Failed to clear conversation. Please try again.');
         } else {
             console.log('Server conversation reset');
+            appendMessage('internal', 'Conversation cleared successfully.');
         }
     } catch (err) {
         console.error('Error resetting conversation:', err);
+        appendMessage('internal', 'Error clearing conversation. Please try again.');
+    } finally {
+        // Reset button state
+        clearBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        clearBtn.disabled = false;
     }
 });
 
@@ -348,9 +400,9 @@ async function pingMcpServer() {
         const resp = await fetch('/ping-mcp-server');
         const data = await resp.json();
         if (data.status === true || data.status === 'OK') {
-            appendMessage('internal', 'Successfully connected');
+            appendMessage('internal', 'Successfully connected to MCP server');
         } else {
-            appendMessage('internal', 'Failed to connect');
+            appendMessage('internal', 'Failed to connect to MCP server');
         }
     } catch (err) {
         appendMessage('internal', `Error pinging MCP server: ${err.message}`);
@@ -359,5 +411,15 @@ async function pingMcpServer() {
 
 // Add click handler for reconnect button
 pingMcpServerBtn.addEventListener('click', async () => {
-    await pingMcpServer();
+    try {
+        // Add visual feedback
+        pingMcpServerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        pingMcpServerBtn.disabled = true;
+
+        await pingMcpServer();
+    } finally {
+        // Reset button state
+        pingMcpServerBtn.innerHTML = '<i class="fas fa-satellite-dish"></i>';
+        pingMcpServerBtn.disabled = false;
+    }
 });
