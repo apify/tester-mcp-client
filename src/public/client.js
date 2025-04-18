@@ -6,7 +6,7 @@ const chatLog = document.getElementById('chatLog');
 const clearBtn = document.getElementById('clearBtn');
 const clientInfo = document.getElementById('clientInfo');
 const information = document.getElementById('information');
-const mcpUrl = document.getElementById('mcpSseUrl');
+const mcpUrl = document.getElementById('mcpUrl');
 const queryInput = document.getElementById('queryInput');
 const sendBtn = document.getElementById('sendBtn');
 const pingMcpServerBtn = document.getElementById('pingMcpServerBtn');
@@ -200,10 +200,10 @@ function appendToolBlock(item) {
   <summary>
     <div class="tool-header">
       <div class="tool-icon">
-        <i class="fas fa-code-branch"></i>
+        <i class="fas fa-file-alt"></i>
       </div>
       <div class="tool-info">
-        <div class="tool-name">Tool Result</div>
+        <div class="tool-name">Tool result</div>
       </div>
       <div class="tool-status">
         <i class="fas fa-chevron-down"></i>

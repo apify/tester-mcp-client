@@ -70,6 +70,12 @@ body {
     gap: 0.5rem;
 }
 
+.header-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    vertical-align: middle;
+}
+
 .header-actions {
     display: flex;
     gap: 0.5rem;
