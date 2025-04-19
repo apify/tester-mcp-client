@@ -128,12 +128,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Auto-resize textarea
-    document.getElementById('queryInput').addEventListener('input', function() {
+    document.getElementById('queryInput').addEventListener('input', function () {
         // Reset height to auto first to get the correct scrollHeight
         this.style.height = 'auto';
         // Set new height based on content
         const newHeight = Math.min(this.scrollHeight, 150); // Cap at max-height
-        this.style.height = newHeight + 'px';
+        this.style.height = `${newHeight}px`;
     });
 
     // Initial connection status check will trigger the tools fetch
@@ -498,11 +498,11 @@ function showToolsLoading() {
 // Fetch available tools
 async function fetchAvailableTools() {
     showToolsLoading();
-    
+
     try {
         const response = await fetch('/available-tools');
         const data = await response.json();
-        
+
         if (data.tools && data.tools.length > 0) {
             toolsLoading.style.display = 'none';
             renderTools(data.tools);
@@ -518,24 +518,24 @@ async function fetchAvailableTools() {
 // Render the tools list
 function renderTools(tools) {
     toolsContainer.innerHTML = '';
-    
+
     // Change the tools count
     const toolsCountElement = document.getElementById('toolsCount');
     toolsCountElement.textContent = `(${tools.length})`;
-    
+
     // Expandable list of tools
     const toolsList = document.createElement('ul');
     toolsList.style.paddingLeft = '1.5rem';
     toolsList.style.marginTop = '0.5rem';
-    
-    tools.forEach(tool => {
+
+    tools.forEach((tool) => {
         const li = document.createElement('li');
         li.style.marginBottom = '0.75rem';
-        
+
         const toolName = document.createElement('strong');
         toolName.textContent = tool.name;
         li.appendChild(toolName);
-        
+
         if (tool.description) {
             const description = document.createElement('div');
             description.style.fontSize = '0.85rem';
@@ -543,9 +543,9 @@ function renderTools(tools) {
             description.textContent = tool.description;
             li.appendChild(description);
         }
-        
+
         toolsList.appendChild(li);
     });
-    
+
     toolsContainer.appendChild(toolsList);
 }
