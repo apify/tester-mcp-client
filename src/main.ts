@@ -258,7 +258,6 @@ app.get('/available-tools', async (_req, res) => {
     try {
         await client.connectToServer(); // Ensure connected
         await client.updateTools(); // Refresh tools
-        
         const tools = client.getTools ? client.getTools() : [];
         res.json({ tools });
     } catch (err) {
