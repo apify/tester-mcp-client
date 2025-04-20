@@ -402,7 +402,7 @@ async function pingMcpServer() {
         if (data.status === true || data.status === 'OK') {
             appendMessage('internal', 'Successfully connected to MCP server');
         } else {
-            appendMessage('internal', 'Failed to connect to MCP server');
+            appendMessage('internal', `${data.error}`);
         }
     } catch (err) {
         appendMessage('internal', `Error pinging MCP server: ${err.message}`);

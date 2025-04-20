@@ -172,6 +172,44 @@ app.get('/sse', async (req, res) => {
     });
 });
 
+/**
+ * Helper function to create or get existing MCP client
+ * @returns Client instance or throws error
+ */
+async function getOrCreateClient(): Promise<Client> {
+    if (!client) {
+        try {
+            client = await createClient(
+                input.mcpUrl,
+                input.mcpTransportType,
+                input.headers,
+                async (tools) => await conversationManager.handleToolUpdate(tools),
+                (notification) => conversationManager.handleNotification(notification),
+            );
+        } catch (err) {
+            const error = err as Error;
+            log.error('Failed to connect to MCP server', { error: error.message, stack: error.stack });
+            throw new Error(`${error.message}`);
+        }
+    }
+    return client;
+}
+
+/**
+ * Helper function to handle client cleanup based on transport type
+ */
+async function cleanupClient(): Promise<void> {
+    if (input.mcpTransportType === 'http-streamable-json-response' && client) {
+        try {
+            await client.close();
+            client = null;
+        } catch (err) {
+            const error = err as Error;
+            log.error('Failed to close client connection', { error: error.message, stack: error.stack });
+        }
+    }
+}
+
 // /message endpoint for the client.js (browser)
 app.post('/message', async (req, res) => {
     const { query } = req.body;
@@ -180,35 +218,20 @@ app.post('/message', async (req, res) => {
     try {
         // Process the query
         await Actor.pushData({ role: 'user', content: query });
-        if (!client) {
-            client = await createClient(
-                input.mcpUrl,
-                input.mcpTransportType,
-                input.headers,
-                async (tools) => await conversationManager.handleToolUpdate(tools),
-                (notification) => conversationManager.handleNotification(notification),
-            );
-        }
-        if (client) {
-            await conversationManager.processUserQuery(client, query, async (role, content) => {
-                await broadcastSSE({ role, content });
-            });
-        } else {
-            await broadcastSSE({ message: 'MCP client is not connected' });
-        }
+        const mcpClient = await getOrCreateClient();
+        await conversationManager.processUserQuery(mcpClient, query, async (role, content) => {
+            await broadcastSSE({ role, content });
+        });
         // Charge for task completion
         await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
         log.info(`Charged query answered event`);
 
-        // close connection if mcpTransport is http-streamable-json-response
-        if (input.mcpTransportType === 'http-streamable-json-response') {
-            await client.close();
-            client = null;
-        }
+        await cleanupClient();
         return res.json({ ok: true });
     } catch (err) {
-        log.exception(err as Error, `Error in processing user query: ${query}`);
-        return res.json({ error: (err as Error).message });
+        const error = err as Error;
+        log.exception(error, `Error in processing user query: ${query}`);
+        return res.json({ ok: false, error: error.message });
     }
 });
 
@@ -216,26 +239,15 @@ app.post('/message', async (req, res) => {
  * Periodically check if the main server is still reachable.
  */
 app.get('/ping-mcp-server', async (_req, res) => {
-    if (!client) {
-        client = await createClient(
-            input.mcpUrl,
-            input.mcpTransportType,
-            input.headers,
-            async (tools) => await conversationManager.handleToolUpdate(tools),
-            (notification) => conversationManager.handleNotification(notification),
-        );
-    }
-    if (!client) return 'Client not connected';
     try {
-        await client.ping();
+        const mcpClient = await getOrCreateClient();
+        await mcpClient.ping();
         return res.json({ status: 'OK' });
     } catch (err) {
-        return res.json({ status: 'Not connected', error: (err as Error).message });
+        const error = err as Error;
+        return res.json({ ok: false, error: error.message });
     } finally {
-        if (input.mcpTransportType === 'http-streamable-json-response') {
-            await client.close();
-            client = null;
-        }
+        await cleanupClient();
     }
 });
 

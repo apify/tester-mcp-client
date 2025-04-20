@@ -58,7 +58,7 @@ export async function createClient(
         log.debug(`Connection ${mcpTransport} to MCP server: ${serverUrl} established`);
     } catch (error) {
         log.error(`Failed to connect to MCP server: ${serverUrl}`, { error });
-        throw new Error(`Failed to connect to MCP server: ${serverUrl}`);
+        throw new Error(`Failed to connect to MCP server: ${serverUrl}, error: ${error}`);
     }
 
     client.setNotificationHandler(LoggingMessageNotificationSchema, (notification) => {

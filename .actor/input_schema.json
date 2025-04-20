@@ -14,8 +14,8 @@
             "type": "string",
             "description": "URL of the MCP Server for updates. Use `SSEClientTransport` if the URL ends with `/sse`; otherwise, use `HttpStreamableClientTransport`.",
             "editor": "textfield",
-            "default": "https://actors-mcp-server.apify.actor",
-            "prefill": "https://actors-mcp-server.apify.actor"
+            "default": "https://actors-mcp-server.apify.actor/sse",
+            "prefill": "https://actors-mcp-server.apify.actor/sse"
         },
         "mcpTransportType": {
             "title": "MCP transport type specification",
@@ -23,7 +23,7 @@
             "description": "This setting helps you to override the MCP transport layer if required. Use `SSEClientTransport` for Server Sent Events (2024-11-05) or `HttpStreamableClientTransport` for JSON Response Streamable HTTP (2025-03-26).",
             "enum": ["sse", "http-streamable-json-response"],
             "enumTitles": ["SSE (Server Sent Events, 2024-11-05)", "JSON Response Streamable HTTP (2025-03-26)"],
-            "default": "http-streamable-json-response"
+            "default": "sse"
         },
         "headers": {
             "title": "HTTP headers",
