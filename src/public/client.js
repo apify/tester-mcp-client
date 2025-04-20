@@ -178,8 +178,7 @@ function appendToolBlock(item) {
         <i class="fas fa-tools"></i>
       </div>
       <div class="tool-info">
-        <div class="tool-name">${item.name || 'Unknown Tool'}</div>
-        <div class="tool-id">ID: ${item.id || 'unknown'}</div>
+          <div class="tool-call">Tool call: ${item.name || 'N/A'}</div>
       </div>
       <div class="tool-status">
         <i class="fas fa-chevron-down"></i>
@@ -195,6 +194,12 @@ function appendToolBlock(item) {
 </details>`;
     } else if (item.type === 'tool_result') {
         const resultContent = item.content ? formatAnyContent(item.content) : '<em>No result available</em>';
+        let contentLength = 0;
+        if (item.content) {
+            contentLength = typeof item.content === 'string'
+                ? item.content.length
+                : JSON.stringify(item.content).length;
+        }
         container.innerHTML = `
 <details class="tool-details">
   <summary>
@@ -204,6 +209,7 @@ function appendToolBlock(item) {
       </div>
       <div class="tool-info">
         <div class="tool-name">Tool result</div>
+        <div class="tool-meta">Length: ${contentLength} chars</div>
       </div>
       <div class="tool-status">
         <i class="fas fa-chevron-down"></i>
