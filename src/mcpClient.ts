@@ -21,13 +21,13 @@ export class MCPClient {
     private conversation: MessageParam[] = [];
     private _isConnected = false;
     private anthropic: Anthropic;
-    private readonly serverUrl: string;
+    private serverUrl: string;
     private readonly customHeaders: Record<string, string> | null;
-    private readonly systemPrompt: string;
-    private readonly modelName: string;
-    private readonly modelMaxOutputTokens: number;
-    private readonly maxNumberOfToolCallsPerQuery: number;
-    private readonly toolCallTimeoutSec: number;
+    private systemPrompt: string;
+    private modelName: string;
+    private modelMaxOutputTokens: number;
+    private maxNumberOfToolCallsPerQuery: number;
+    private toolCallTimeoutSec: number;
     private readonly tokenCharger: TokenCharger | null;
     private client = new Client(
         { name: 'example-client', version: '0.1.0' },
@@ -84,6 +84,7 @@ export class MCPClient {
         await this.client.connect(transport);
         await this.updateTools();
         await this.setNotifications();
+        this._isConnected = true; // Mark as connected after successful connection
     }
 
     async setNotifications() {
@@ -204,7 +205,7 @@ export class MCPClient {
                 this.conversation.push({ role: 'assistant', content: block.text || '' });
                 sseEmit('assistant', block.text || '');
             } else if (block.type === 'tool_use') {
-                if (toolCallCount > this.maxNumberOfToolCallsPerQuery) {
+                if (toolCallCount >= this.maxNumberOfToolCallsPerQuery) {
                     const msg = `Too many tool calls in a single turn! This has been implemented to prevent infinite loops.
                         Limit is ${this.maxNumberOfToolCallsPerQuery}.
                         You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
@@ -283,5 +284,37 @@ export class MCPClient {
             sseEmit('assistant', errorMsg);
             throw new Error(errorMsg);
         }
+    }
+
+    /**
+     * Update client settings with new values
+     */
+    async updateClientSettings(settings: {
+        mcpSseUrl?: string;
+        systemPrompt?: string;
+        modelName?: string;
+        modelMaxOutputTokens?: number;
+        maxNumberOfToolCallsPerQuery?: number;
+        toolCallTimeoutSec?: number;
+    }) {
+        let needsReconnect = false;
+
+        if (settings.systemPrompt !== undefined) this.systemPrompt = settings.systemPrompt;
+        if (settings.modelName !== undefined && settings.modelName !== this.modelName) this.modelName = settings.modelName;
+        if (settings.modelMaxOutputTokens !== undefined) this.modelMaxOutputTokens = settings.modelMaxOutputTokens;
+        if (settings.maxNumberOfToolCallsPerQuery !== undefined) this.maxNumberOfToolCallsPerQuery = settings.maxNumberOfToolCallsPerQuery;
+        if (settings.toolCallTimeoutSec !== undefined) this.toolCallTimeoutSec = settings.toolCallTimeoutSec;
+
+        // If MCP SSE URL changed, we need to reconnect to the server
+        if (settings.mcpSseUrl !== undefined && settings.mcpSseUrl !== this.serverUrl) {
+            this.serverUrl = settings.mcpSseUrl;
+            needsReconnect = true;
+        }
+        // If we need to reconnect, close existing connection and establish a new one
+        if (needsReconnect) {
+            this._isConnected = false;
+            await this.connectToServer();
+        }
+        return true;
     }
 }

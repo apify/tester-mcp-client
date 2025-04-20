@@ -106,6 +106,16 @@ log.debug(`systemPrompt: ${input.systemPrompt}`);
 log.debug(`mcpSseUrl: ${input.mcpSseUrl}`);
 log.debug(`modelName: ${input.modelName}`);
 
+// Current runtime settings that can be modified
+let runtimeSettings = {
+    mcpSseUrl: input.mcpSseUrl,
+    systemPrompt: input.systemPrompt,
+    modelName: input.modelName,
+    modelMaxOutputTokens: input.modelMaxOutputTokens,
+    maxNumberOfToolCallsPerQuery: input.maxNumberOfToolCallsPerQuery,
+    toolCallTimeoutSec: input.toolCallTimeoutSec,
+};
+
 if (!input.llmProviderApiKey) {
     log.error('No API key provided for LLM provider. Report this issue to Actor developer.');
     await Actor.exit('No API key provided for LLM provider. Report this issue to Actor developer.');
@@ -222,6 +232,56 @@ app.get('/client-info', (_req, res) => {
         publicUrl,
         information: BASIC_INFORMATION,
     });
+});
+
+// GET /settings endpoint to retrieve current settings
+app.get('/settings', (_req, res) => {
+    res.json(runtimeSettings);
+});
+
+// POST /settings endpoint to update settings
+app.post('/settings', async (req, res): Promise<void> => {
+    try {
+        const newSettings = req.body;
+        // Validate required fields
+        if (!newSettings.mcpSseUrl) {
+            res.status(400).json({ success: false, error: 'MCP SSE URL is required' });
+            return;
+        }
+        if (!newSettings.modelName) {
+            res.status(400).json({ success: false, error: 'Model name is required' });
+            return;
+        }
+        runtimeSettings = {
+            ...runtimeSettings,
+            ...newSettings,
+        };
+
+        await client.updateClientSettings(runtimeSettings);
+        res.json({ success: true });
+    } catch (error) {
+        log.error('Error updating settings:', { error: (error instanceof Error) ? error.message : String(error) });
+        res.status(500).json({ success: false, error: 'Failed to update settings' });
+    }
+});
+
+// POST /settings/reset endpoint to reset settings to defaults
+app.post('/settings/reset', async (_req, res) => {
+    try {
+        runtimeSettings = {
+            mcpSseUrl: input.mcpSseUrl,
+            systemPrompt: input.systemPrompt,
+            modelName: input.modelName,
+            modelMaxOutputTokens: input.modelMaxOutputTokens,
+            maxNumberOfToolCallsPerQuery: input.maxNumberOfToolCallsPerQuery,
+            toolCallTimeoutSec: input.toolCallTimeoutSec,
+        };
+        await client.updateClientSettings(runtimeSettings);
+        res.json({ success: true });
+    } catch (error) {
+        log.error('Error resetting settings:', { error: (error instanceof Error) ? error.message : String(error) });
+        res.status(500).json({ success: false, error: 'Failed to reset settings' });
+    }
 });
 
 /**

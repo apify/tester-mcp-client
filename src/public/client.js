@@ -4,7 +4,6 @@
 // ================== DOM ELEMENTS & GLOBAL STATE ==================
 const chatLog = document.getElementById('chatLog');
 const clearBtn = document.getElementById('clearBtn');
-const clientInfo = document.getElementById('clientInfo');
 const information = document.getElementById('information');
 const mcpServerStatus = document.getElementById('mcpServerStatus');
 const mcpSseUrl = document.getElementById('mcpSseUrl');
@@ -101,7 +100,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const resp = await fetch('/client-info');
         const data = await resp.json();
         if (mcpSseUrl) mcpSseUrl.textContent = data.mcpSseUrl;
-        if (clientInfo) clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
         if (information) information.innerHTML = `${data.information}`;
     } catch (err) {
         console.error('Error fetching client info:', err);
@@ -160,6 +158,117 @@ document.addEventListener('DOMContentLoaded', async () => {
         fetchAvailableTools();
     });
 });
+
+// Settings form handling
+document.addEventListener('DOMContentLoaded', async () => {
+    const settingsForm = document.getElementById('settingsForm');
+    const mcpSseUrlInput = document.getElementById('mcpSseUrlInput');
+    const modelNameSelect = document.getElementById('modelNameSelect');
+    const modelMaxTokensInput = document.getElementById('modelMaxTokensInput');
+    const maxToolCallsInput = document.getElementById('maxToolCallsInput');
+    const toolCallTimeoutInput = document.getElementById('toolCallTimeoutInput');
+    const systemPromptInput = document.getElementById('systemPromptInput');
+    const resetSettingsBtn = document.getElementById('resetSettingsBtn');
+
+    // Load current settings
+    try {
+        const resp = await fetch('/settings');
+        const settings = await resp.json();
+
+        mcpSseUrlInput.value = settings.mcpSseUrl || '';
+        modelNameSelect.value = settings.modelName || 'claude-3-7-sonnet-latest';
+        modelMaxTokensInput.value = settings.modelMaxOutputTokens || 2048;
+        maxToolCallsInput.value = settings.maxNumberOfToolCallsPerQuery || 5;
+        toolCallTimeoutInput.value = settings.toolCallTimeoutSec || 300;
+        systemPromptInput.value = settings.systemPrompt || '';
+    } catch (err) {
+        console.error('Error loading settings:', err);
+        showNotification('Failed to load settings. Please check console for details.', 'error');
+    }
+
+    // Handle form submission
+    settingsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newSettings = {
+            mcpSseUrl: mcpSseUrlInput.value,
+            modelName: modelNameSelect.value,
+            modelMaxOutputTokens: parseInt(modelMaxTokensInput.value, 10),
+            maxNumberOfToolCallsPerQuery: parseInt(maxToolCallsInput.value, 10),
+            toolCallTimeoutSec: parseInt(toolCallTimeoutInput.value, 10),
+            systemPrompt: systemPromptInput.value,
+        };
+        try {
+            const resp = await fetch('/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSettings),
+            });
+            const result = await resp.json();
+            if (result.success) {
+                showNotification('Settings updated successfully! Changes will apply to new conversations.', 'success');
+                const clientInfoResp = await fetch('/client-info');
+                const clientInfoData = await clientInfoResp.json();
+                if (mcpSseUrl) mcpSseUrl.textContent = clientInfoData.mcpSseUrl;
+            } else {
+                showNotification(`Failed to update settings: ${result.error}`, 'error');
+            }
+        } catch (err) {
+            console.error('Error saving settings:', err);
+            showNotification('Failed to save settings. Please check console for details.', 'error');
+        }
+    });
+
+    // Reset settings to defaults
+    resetSettingsBtn.addEventListener('click', async () => {
+        try {
+            const resp = await fetch('/settings/reset', { method: 'POST' });
+            const result = await resp.json();
+
+            if (result.success) {
+                // Reload the form with defaults
+                const settingsResp = await fetch('/settings');
+                const settings = await settingsResp.json();
+
+                mcpSseUrlInput.value = settings.mcpSseUrl || '';
+                modelNameSelect.value = settings.modelName || 'claude-3-7-sonnet-latest';
+                modelMaxTokensInput.value = settings.modelMaxOutputTokens || 2048;
+                maxToolCallsInput.value = settings.maxNumberOfToolCallsPerQuery || 5;
+                toolCallTimeoutInput.value = settings.toolCallTimeoutSec || 300;
+                systemPromptInput.value = settings.systemPrompt || '';
+                showNotification('Settings reset to defaults successfully!', 'success');
+            } else {
+                showNotification(`Failed to reset settings: ${result.error}`, 'error');
+            }
+        } catch (err) {
+            console.error('Error resetting settings:', err);
+            showNotification('Failed to reset settings. Please check console for details.', 'error');
+        }
+    });
+});
+
+// Utility to show notifications
+function showNotification(message, type = 'info') {
+    const existingNotification = document.querySelector('.notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    const settingsDetails = document.getElementById('settingsDetails');
+    if (settingsDetails) {
+        settingsDetails.parentNode.insertBefore(notification, settingsDetails.nextSibling);
+    } else {
+        chatLog.parentNode.insertBefore(notification, chatLog);
+        console.warn('Settings details element not found, inserting notification before chat log.');
+    }
+    // Auto-dismiss
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
 
 // ================== 4) MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
 
