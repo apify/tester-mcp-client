@@ -10,7 +10,6 @@ const mcpUrl = document.getElementById('mcpUrl');
 const queryInput = document.getElementById('queryInput');
 const sendBtn = document.getElementById('sendBtn');
 const pingMcpServerBtn = document.getElementById('pingMcpServerBtn');
-const refreshToolsBtn = document.getElementById('refreshToolsBtn');
 const toolsContainer = document.getElementById('availableTools');
 const toolsLoading = document.getElementById('toolsLoading');
 
