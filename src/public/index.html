@@ -16,20 +16,37 @@
         <div class="header-content">
             <h2><img src="https://apify.com/img/favicon.svg" alt="Apify" class="header-icon"> Apify MCP client</h2>
             <div class="header-actions">
-                <button id="pingMcpServerBtn" class="icon-btn" title="Ping MCP Server">
-                    <i class="fas fa-satellite-dish"></i>
-                </button>
-                <button id="clearBtn" class="icon-btn" title="Clear Chat">
-                    <i class="fas fa-trash"></i>
-                </button>
+                <div class="modal-buttons">
+                    <button id="quickStartBtn" class="icon-btn" title="Quick Start Guide">
+                        <i class="fas fa-rocket"></i>
+                    </button>
+                    <button id="settingsBtn" class="icon-btn" title="Settings & Information">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button id="toolsBtn" class="icon-btn" title="Available Tools">
+                        <i class="fas fa-tools"></i>
+                    </button>
+                </div>
+                <div class="action-buttons">
+                    <button id="pingMcpServerBtn" class="icon-btn" title="Ping MCP Server">
+                        <i class="fas fa-satellite-dish"></i>
+                    </button>
+                    <button id="clearBtn" class="icon-btn" title="Clear Chat">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="info-panels">
-        <details class="info-panel">
-            <summary><i class="fas fa-rocket"></i> Quick start guide</summary>
-            <div class="panel-content">
+    <!-- Quick Start Modal -->
+    <div id="quickStartModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-rocket"></i> Quick Start Guide</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
                 <h4>Example questions you can ask:</h4>
                 <ul>
                     <li><i class="fas fa-quote-left"></i> What are the most popular Actors for social media scraping?</li>
@@ -37,29 +54,39 @@
                     <li><i class="fas fa-quote-left"></i> Which Actor should I use to extract data from LinkedIn?</li>
                 </ul>
             </div>
-        </details>
-        <details class="info-panel">
-            <summary><i class="fas fa-cog"></i> Settings & Information</summary>
-            <div class="panel-content">
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-cog"></i> Settings & Information</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
                 <pre id="clientInfo"></pre>
                 <pre id="information"></pre>
                 <div class="server-info">
                     <i class="fas fa-server"></i> MCP Server URL: <span id="mcpUrl"></span>
                 </div>
             </div>
-        </details>
-        <details class="info-panel">
-            <summary><i class="fas fa-tools"></i> Available Tools <span id="toolsCount"></span></summary>
-            <div class="panel-content">
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
-                    <button id="refreshToolsBtn" class="icon-btn">
-                        <i class="fas fa-sync-alt"></i> Refresh Tools
-                    </button>
-                </div>
+        </div>
+    </div>
+
+    <!-- Tools Modal -->
+    <div id="toolsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-tools"></i> Available Tools <span id="toolsCount"></span></h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
                 <p id="toolsLoading">Tools will be loaded once connected</p>
                 <div id="availableTools"></div>
             </div>
-        </details>
+        </div>
+    </div>
 
     <div id="chatLog"></div>
 

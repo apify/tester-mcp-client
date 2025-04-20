@@ -109,25 +109,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    setupModals();
     // Call ping on a page load
     await pingMcpServer();
     // Initial fetch of tools
     await fetchAvailableTools();
-    // Manual refresh button
-    refreshToolsBtn.addEventListener('click', async () => {
-        try {
-            // Add visual feedback
-            refreshToolsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            refreshToolsBtn.disabled = true;
-            toolsContainer.innerHTML = '';
-            document.getElementById('toolsCount').textContent = '';
-            await fetchAvailableTools();
-        } finally {
-            // Reset button state
-            refreshToolsBtn.innerHTML = '🔄 Refresh Tools';
-            refreshToolsBtn.disabled = false;
-        }
-    });
 });
 
 // ================== MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
@@ -502,4 +488,67 @@ function renderTools(tools) {
     });
 
     toolsContainer.appendChild(toolsList);
+}
+
+// ================== MODAL HANDLING ==================
+function setupModals() {
+    // Get button elements
+    const quickStartBtn = document.getElementById('quickStartBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const toolsBtn = document.getElementById('toolsBtn');
+
+    // Function to show a modal
+    function showModal(modalId) {
+        const modalElement = document.getElementById(modalId);
+        if (modalElement) {
+            modalElement.style.display = 'block';
+            document.body.style.overflow = 'hidden'; // Prevent scrolling
+            // Refresh tools when tools modal is opened
+            if (modalId === 'toolsModal') {
+                fetchAvailableTools();
+            }
+        }
+    }
+
+    // Function to hide a modal
+    function hideModal(modalId) {
+        const modalElement = document.getElementById(modalId);
+        if (modalElement) {
+            modalElement.style.display = 'none';
+            document.body.style.overflow = ''; // Restore scrolling
+        }
+    }
+
+    // Add click handlers for modal buttons
+    quickStartBtn.addEventListener('click', () => showModal('quickStartModal'));
+    settingsBtn.addEventListener('click', () => showModal('settingsModal'));
+    toolsBtn.addEventListener('click', () => showModal('toolsModal'));
+
+    // Add click handlers for close buttons
+    document.querySelectorAll('.close-modal').forEach((button) => {
+        button.addEventListener('click', () => {
+            const modal = button.closest('.modal');
+            if (modal) {
+                hideModal(modal.id);
+            }
+        });
+    });
+
+    // Close modal when clicking outside
+    window.addEventListener('click', (event) => {
+        if (event.target.classList.contains('modal')) {
+            hideModal(event.target.id);
+        }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            document.querySelectorAll('.modal').forEach((modal) => {
+                if (modal.style.display === 'block') {
+                    hideModal(modal.id);
+                }
+            });
+        }
+    });
 }
