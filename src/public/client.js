@@ -10,6 +10,9 @@ const mcpUrl = document.getElementById('mcpUrl');
 const queryInput = document.getElementById('queryInput');
 const sendBtn = document.getElementById('sendBtn');
 const pingMcpServerBtn = document.getElementById('pingMcpServerBtn');
+const refreshToolsBtn = document.getElementById('refreshToolsBtn');
+const toolsContainer = document.getElementById('availableTools');
+const toolsLoading = document.getElementById('toolsLoading');
 
 // Simple scroll to bottom function
 function scrollToBottom() {
@@ -108,6 +111,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Call ping on a page load
     await pingMcpServer();
+    // Initial fetch of tools
+    await fetchAvailableTools();
+    // Manual refresh button
+    refreshToolsBtn.addEventListener('click', async () => {
+        try {
+            // Add visual feedback
+            refreshToolsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            refreshToolsBtn.disabled = true;
+            toolsContainer.innerHTML = '';
+            document.getElementById('toolsCount').textContent = '';
+            await fetchAvailableTools();
+        } finally {
+            // Reset button state
+            refreshToolsBtn.innerHTML = '🔄 Refresh Tools';
+            refreshToolsBtn.disabled = false;
+        }
+    });
 });
 
 // ================== MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
@@ -429,3 +449,57 @@ pingMcpServerBtn.addEventListener('click', async () => {
         pingMcpServerBtn.disabled = false;
     }
 });
+
+// ================== AVAILABLE TOOLS ==================
+// Fetch available tools
+async function fetchAvailableTools() {
+    try {
+        const response = await fetch('/available-tools');
+        const data = await response.json();
+
+        if (data.tools && data.tools.length > 0) {
+            toolsLoading.style.display = 'none';
+            renderTools(data.tools);
+        } else {
+            toolsLoading.textContent = 'No tools available.';
+        }
+    } catch (err) {
+        toolsLoading.textContent = 'Failed to load tools. Try reconnecting.';
+        console.error('Error fetching tools:', err);
+    }
+}
+
+// Render the tools list
+function renderTools(tools) {
+    toolsContainer.innerHTML = '';
+
+    // Change the tools count
+    const toolsCountElement = document.getElementById('toolsCount');
+    toolsCountElement.textContent = `(${tools.length})`;
+
+    // Expandable list of tools
+    const toolsList = document.createElement('ul');
+    toolsList.style.paddingLeft = '1.5rem';
+    toolsList.style.marginTop = '0.5rem';
+
+    tools.forEach((tool) => {
+        const li = document.createElement('li');
+        li.style.marginBottom = '0.75rem';
+
+        const toolName = document.createElement('strong');
+        toolName.textContent = tool.name;
+        li.appendChild(toolName);
+
+        if (tool.description) {
+            const description = document.createElement('div');
+            description.style.fontSize = '0.85rem';
+            description.style.marginTop = '0.25rem';
+            description.textContent = tool.description;
+            li.appendChild(description);
+        }
+
+        toolsList.appendChild(li);
+    });
+
+    toolsContainer.appendChild(toolsList);
+}

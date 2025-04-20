@@ -292,6 +292,23 @@ app.post('/conversation/reset', (_req, res) => {
     res.json({ ok: true });
 });
 
+/**
+ * GET /available-tools endpoint to fetch available tools
+ */
+app.get('/available-tools', async (_req, res) => {
+    try {
+        const mcpClient = await getOrCreateClient();
+        const tools = await conversationManager.updateAndGetTools(mcpClient);
+        return res.json({ tools });
+    } catch (err) {
+        const error = err as Error;
+        log.error(`Error fetching tools: ${error.message}`);
+        return res.status(500).json({ error: 'Failed to fetch tools' });
+    } finally {
+        await cleanupClient();
+    }
+});
+
 app.get('*', (_req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });

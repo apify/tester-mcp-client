@@ -59,6 +59,12 @@ export class ConversationManager {
         log.debug(`Connected to server with tools: ${this.tools.map((x) => x.name)}`);
     }
 
+    async updateAndGetTools(mcpClient: Client) {
+        const tools = await mcpClient.listTools();
+        await this.handleToolUpdate(tools);
+        return this.tools;
+    }
+
     private async createMessageWithRetry(
         messages: MessageParam[],
         maxRetries = 3,
