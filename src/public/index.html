@@ -2,62 +2,75 @@
 <html lang="">
 <head>
     <meta charset="utf-8" />
-    <title>Tester MCP Client</title>
+    <title>Apify MCP client</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="AI Chat Interface" />
+    <link rel="icon" type="image/svg+xml" href="https://apify.com/img/favicon.svg">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div id="chatContainer">
     <div class="header">
-        <h2>Tester MCP Client</h2>
+        <div class="header-content">
+            <h2><img src="https://apify.com/img/favicon.svg" alt="Apify" class="header-icon"> Apify MCP client</h2>
+            <div class="header-actions">
+                <button id="pingMcpServerBtn" class="icon-btn" title="Ping MCP Server">
+                    <i class="fas fa-satellite-dish"></i>
+                </button>
+                <button id="clearBtn" class="icon-btn" title="Clear Chat">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
     </div>
 
-    <details>
-        <summary>🚀 Quick start guide</summary>
-        <div style="padding: 1rem 0;">
-            <h4>Example questions you can ask:</h4>
-            <ul style="padding-left: 1.5rem; margin-top: 0.5rem;">
-                <li>"What are the most popular Actors for social media scraping?"</li>
-                <li>"Show me how to use the Google Search Results Scraper"</li>
-                <li>"Which Actor should I use to extract data from LinkedIn?"</li>
-            </ul>
-        </div>
-    </details>
-    <details>
-        <summary>🔧 Settings & Information</summary>
-        <div style="padding: 1rem 0;">
-            <pre id="clientInfo"></pre>
-            <pre id="information"></pre>
-            <div>MCP Server URL: <span id="mcpUrl"></span></div>
-        </div>
-    </details>
-
-    <div class="status-bar">
-      <button id="pingMcpServerBtn"> 🛰️ Ping MCP Server </button>
-      <button id="clearBtn"> 🧹 Clear Chat </button>
+    <div class="info-panels">
+        <details class="info-panel">
+            <summary><i class="fas fa-rocket"></i> Quick start guide</summary>
+            <div class="panel-content">
+                <h4>Example questions you can ask:</h4>
+                <ul>
+                    <li><i class="fas fa-quote-left"></i> What are the most popular Actors for social media scraping?</li>
+                    <li><i class="fas fa-quote-left"></i> Show me how to use the Google Search Results Scraper</li>
+                    <li><i class="fas fa-quote-left"></i> Which Actor should I use to extract data from LinkedIn?</li>
+                </ul>
+            </div>
+        </details>
+        <details class="info-panel">
+            <summary><i class="fas fa-cog"></i> Settings & Information</summary>
+            <div class="panel-content">
+                <pre id="clientInfo"></pre>
+                <pre id="information"></pre>
+                <div class="server-info">
+                    <i class="fas fa-server"></i> MCP Server URL: <span id="mcpUrl"></span>
+                </div>
+            </div>
+        </details>
     </div>
 
-    <div id="chatLog"> </div>
+    <div id="chatLog"></div>
 
     <div id="inputRow">
-        <textarea
-            id="queryInput"
-            rows="3"
-            placeholder="Type your message here..."
-        ></textarea>
-        <button id="sendBtn">Send</button>
+        <div class="input-wrapper">
+            <textarea
+                id="queryInput"
+                rows="1"
+                placeholder="Type your message here..."
+            ></textarea>
+            <button id="sendBtn" class="send-btn">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
     </div>
 </div>
 <script src="client.js"></script>
 <script>
     // Updated auto-resize textarea
     document.getElementById('queryInput').addEventListener('input', function() {
-        // Reset height to auto first to get the correct scrollHeight
         this.style.height = 'auto';
-        // Set new height based on content
-        const newHeight = Math.min(this.scrollHeight, 150); // Cap at max-height
+        const newHeight = Math.min(this.scrollHeight, 150);
         this.style.height = newHeight + 'px';
     });
 </script>

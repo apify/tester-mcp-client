@@ -120,7 +120,7 @@ APIFY_TOKEN=YOUR_APIFY_TOKEN
 LLM_PROVIDER_API_KEY=YOUR_API_KEY
 ```
 
-Default values for settings such as `mcpSseUrl`, `systemPrompt`, and others are defined in the `const.ts` file. You can adjust these as needed for your development.
+Default values for settings such as `mcpUrl`, `systemPrompt`, and others are defined in the `const.ts` file. You can adjust these as needed for your development.
 
 Run the client locally
 
