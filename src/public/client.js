@@ -115,6 +115,106 @@ document.addEventListener('DOMContentLoaded', async () => {
     await fetchAvailableTools();
 });
 
+// Settings form handling
+document.addEventListener('DOMContentLoaded', async () => {
+    const settingsForm = document.getElementById('settingsForm');
+    const mcpSseUrlInput = document.getElementById('mcpSseUrlInput');
+    const modelNameSelect = document.getElementById('modelNameSelect');
+    const modelMaxTokensInput = document.getElementById('modelMaxTokensInput');
+    const maxToolCallsInput = document.getElementById('maxToolCallsInput');
+    const toolCallTimeoutInput = document.getElementById('toolCallTimeoutInput');
+    const systemPromptInput = document.getElementById('systemPromptInput');
+    const resetSettingsBtn = document.getElementById('resetSettingsBtn');
+    // Load current settings
+    try {
+        const resp = await fetch('/settings');
+        const settings = await resp.json();
+        mcpSseUrlInput.value = settings.mcpUrl;
+        modelNameSelect.value = settings.modelName;
+        modelMaxTokensInput.value = settings.modelMaxOutputTokens;
+        maxToolCallsInput.value = settings.maxNumberOfToolCallsPerQuery;
+        toolCallTimeoutInput.value = settings.toolCallTimeoutSec;
+        systemPromptInput.value = settings.systemPrompt;
+    } catch (err) {
+        console.error('Error loading settings:', err);
+        showNotification('Failed to load settings. Please check console for details.', 'error');
+    }
+    // Handle form submission
+    settingsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newSettings = {
+            mcpUrl: mcpSseUrlInput.value,
+            modelName: modelNameSelect.value,
+            modelMaxOutputTokens: parseInt(modelMaxTokensInput.value, 10),
+            maxNumberOfToolCallsPerQuery: parseInt(maxToolCallsInput.value, 10),
+            toolCallTimeoutSec: parseInt(toolCallTimeoutInput.value, 10),
+            systemPrompt: systemPromptInput.value,
+        };
+        try {
+            const resp = await fetch('/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSettings),
+            });
+            const result = await resp.json();
+            if (result.success) {
+                showNotification('Settings updated successfully! Changes will apply to new conversations.', 'success');
+                const clientInfoResp = await fetch('/client-info');
+                const clientInfoData = await clientInfoResp.json();
+                if (mcpUrl) mcpUrl.textContent = clientInfoData.mcpUrl;
+            } else {
+                showNotification(`Failed to update settings: ${result.error}`, 'error');
+            }
+        } catch (err) {
+            console.error('Error saving settings:', err);
+            showNotification('Failed to save settings. Please check console for details.', 'error');
+        }
+    });
+    // Reset settings to defaults
+    resetSettingsBtn.addEventListener('click', async () => {
+        try {
+            const resp = await fetch('/settings/reset', { method: 'POST' });
+            const result = await resp.json();
+            if (result.success) {
+                // Reload the form with defaults from the server
+                const settingsResp = await fetch('/settings');
+                const settings = await settingsResp.json();
+                mcpSseUrlInput.value = settings.mcpUrl;
+                modelNameSelect.value = settings.modelName;
+                modelMaxTokensInput.value = settings.modelMaxOutputTokens;
+                maxToolCallsInput.value = settings.maxNumberOfToolCallsPerQuery;
+                toolCallTimeoutInput.value = settings.toolCallTimeoutSec;
+                systemPromptInput.value = settings.systemPrompt;
+                showNotification('Settings reset to defaults successfully!', 'success');
+            } else {
+                showNotification(`Failed to reset settings: ${result.error}`, 'error');
+            }
+        } catch (err) {
+            console.error('Error resetting settings:', err);
+            showNotification('Failed to reset settings. Please check console for details.', 'error');
+        }
+    });
+});
+
+// Utility to show notifications
+function showNotification(message, type = 'info') {
+    const existingNotification = document.querySelector('.notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    chatLog.parentNode.insertBefore(notification, chatLog);
+
+    // Auto-dismiss
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
 // ================== MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
 
 /**

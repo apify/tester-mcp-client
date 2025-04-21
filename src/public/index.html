@@ -20,7 +20,7 @@
                     <button id="quickStartBtn" class="icon-btn" title="Quick Start Guide">
                         <i class="fas fa-rocket"></i>
                     </button>
-                    <button id="settingsBtn" class="icon-btn" title="Settings & Information">
+                    <button id="settingsBtn" class="icon-btn" title="Settings & Configuration">
                         <i class="fas fa-cog"></i>
                     </button>
                     <button id="toolsBtn" class="icon-btn" title="Available Tools">
@@ -61,15 +61,55 @@
     <div id="settingsModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3><i class="fas fa-cog"></i> Settings & Information</h3>
+                <h3><i class="fas fa-cog"></i> Settings & Configuration</h3>
                 <button class="close-modal">&times;</button>
             </div>
             <div class="modal-body">
-                <pre id="clientInfo"></pre>
-                <pre id="information"></pre>
-                <div class="server-info">
-                    <i class="fas fa-server"></i> MCP Server URL: <span id="mcpUrl"></span>
-                </div>
+                <form id="settingsForm" class="settings-form">
+                    <div class="form-group">
+                        <label for="mcpSseUrlInput">MCP Server SSE URL:</label>
+                        <input type="text" id="mcpSseUrlInput" class="form-control" placeholder="https://actors-mcp-server.apify.actor/sse">
+                        <small class="form-text">The URL for the MCP Server Sent Events endpoint.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modelNameSelect">Model:</label>
+                        <select id="modelNameSelect" class="form-control">
+                            <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
+                            <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku</option>
+                        </select>
+                        <small class="form-text">Select the language model to use.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modelMaxTokensInput">Max Output Tokens:</label>
+                        <input type="number" id="modelMaxTokensInput" class="form-control" min="100" max="10000" step="1" placeholder="2048">
+                        <small class="form-text">Maximum tokens in model responses. Higher values allow longer responses but may increase latency.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="maxToolCallsInput">Max Tool Calls Per Query:</label>
+                        <input type="number" id="maxToolCallsInput" class="form-control" min="1" max="20" step="1" placeholder="5">
+                        <small class="form-text">Maximum number of tool calls allowed per query.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="toolCallTimeoutInput">Tool Call Timeout (seconds):</label>
+                        <input type="number" id="toolCallTimeoutInput" class="form-control" min="10" max="600" step="10" placeholder="300">
+                        <small class="form-text">Timeout for tool calls in seconds.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="systemPromptInput">System Prompt:</label>
+                        <textarea id="systemPromptInput" class="form-control" rows="6" placeholder="You are a helpful Apify assistant with tools called Actors..."></textarea>
+                        <small class="form-text">System prompt that guides the model's behavior.</small>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" id="saveSettingsBtn" class="btn btn-primary">Save Settings</button>
+                        <button type="button" id="resetSettingsBtn" class="btn btn-secondary">Reset to Defaults</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

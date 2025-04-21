@@ -20,11 +20,11 @@ if (typeof globalThis.EventSource === 'undefined') {
 export class ConversationManager {
     private conversation: MessageParam[] = [];
     private anthropic: Anthropic;
-    private readonly systemPrompt: string;
-    private readonly modelName: string;
-    private readonly modelMaxOutputTokens: number;
-    private readonly maxNumberOfToolCallsPerQuery: number;
-    private readonly toolCallTimeoutSec: number;
+    private systemPrompt: string;
+    private modelName: string;
+    private modelMaxOutputTokens: number;
+    private maxNumberOfToolCallsPerQuery: number;
+    private toolCallTimeoutSec: number;
     private readonly tokenCharger: TokenCharger | null;
     private tools: Tool[] = [];
 
@@ -63,6 +63,25 @@ export class ConversationManager {
         const tools = await mcpClient.listTools();
         await this.handleToolUpdate(tools);
         return this.tools;
+    }
+
+    /**
+     * Update client settings with new values
+     */
+    async updateClientSettings(settings: {
+        systemPrompt?: string;
+        modelName?: string;
+        modelMaxOutputTokens?: number;
+        maxNumberOfToolCallsPerQuery?: number;
+        toolCallTimeoutSec?: number;
+    }): Promise<boolean> {
+        if (settings.systemPrompt !== undefined) this.systemPrompt = settings.systemPrompt;
+        if (settings.modelName !== undefined && settings.modelName !== this.modelName) this.modelName = settings.modelName;
+        if (settings.modelMaxOutputTokens !== undefined) this.modelMaxOutputTokens = settings.modelMaxOutputTokens;
+        if (settings.maxNumberOfToolCallsPerQuery !== undefined) this.maxNumberOfToolCallsPerQuery = settings.maxNumberOfToolCallsPerQuery;
+        if (settings.toolCallTimeoutSec !== undefined) this.toolCallTimeoutSec = settings.toolCallTimeoutSec;
+
+        return true;
     }
 
     private async createMessageWithRetry(
@@ -137,7 +156,7 @@ export class ConversationManager {
                 this.conversation.push({ role: 'assistant', content: block.text || '' });
                 sseEmit('assistant', block.text || '');
             } else if (block.type === 'tool_use') {
-                if (toolCallCount > this.maxNumberOfToolCallsPerQuery) {
+                if (toolCallCount >= this.maxNumberOfToolCallsPerQuery) {
                     const msg = `Too many tool calls in a single turn! This has been implemented to prevent infinite loops.
                         Limit is ${this.maxNumberOfToolCallsPerQuery}.
                         You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;

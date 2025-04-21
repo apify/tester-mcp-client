@@ -92,16 +92,6 @@ try {
     ACTOR_TIMEOUT_AT = undefined;
 }
 
-const app = express();
-app.use(express.json());
-app.use(cors());
-
-// Serve your public folder (where index.html is located)
-const filename = fileURLToPath(import.meta.url);
-const publicPath = path.join(path.dirname(filename), 'public');
-const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
-app.use(express.static(publicPath));
-
 const actorInput = (await Actor.getInput<Partial<Input>>()) ?? ({} as Input);
 const input = processInput(actorInput ?? ({} as Input));
 
@@ -115,12 +105,25 @@ if (!input.llmProviderApiKey) {
     await Actor.exit('No API key provided for LLM provider. Report this issue to Actor developer.');
 }
 
-// Only one browser client can be connected at a time
-type BrowserSSEClient = { id: number; res: express.Response };
-let browserClient: BrowserSSEClient | null = null;
+let runtimeSettings = {
+    mcpUrl: input.mcpUrl,
+    mcpTransportType: input.mcpTransportType,
+    systemPrompt: input.systemPrompt,
+    modelName: input.modelName,
+    modelMaxOutputTokens: input.modelMaxOutputTokens,
+    maxNumberOfToolCallsPerQuery: input.maxNumberOfToolCallsPerQuery,
+    toolCallTimeoutSec: input.toolCallTimeoutSec,
+};
 
-// Create a single instance of your MCP client (client is connected to the MCP-server)
-let client: Client | null = null;
+const app = express();
+app.use(express.json());
+app.use(cors());
+
+// Serve your public folder (where index.html is located)
+const filename = fileURLToPath(import.meta.url);
+const publicPath = path.join(path.dirname(filename), 'public');
+const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
+app.use(express.static(publicPath));
 
 const conversationManager = new ConversationManager(
     input.systemPrompt,
@@ -131,6 +134,13 @@ const conversationManager = new ConversationManager(
     input.toolCallTimeoutSec,
     getChargeForTokens() ? new ActorTokenCharger() : null,
 );
+
+// Only one browser client can be connected at a time
+type BrowserSSEClient = { id: number; res: express.Response };
+let browserClient: BrowserSSEClient | null = null;
+
+// Create a single instance of your MCP client (client is connected to the MCP-server)
+let client: Client | null = null;
 
 // 5) SSE endpoint for the client.js (browser)
 app.get('/sse', async (req, res) => {
@@ -180,8 +190,8 @@ async function getOrCreateClient(): Promise<Client> {
     if (!client) {
         try {
             client = await createClient(
-                input.mcpUrl,
-                input.mcpTransportType,
+                runtimeSettings.mcpUrl,
+                runtimeSettings.mcpTransportType,
                 input.headers,
                 async (tools) => await conversationManager.handleToolUpdate(tools),
                 (notification) => conversationManager.handleNotification(notification),
@@ -256,10 +266,10 @@ app.get('/ping-mcp-server', async (_req, res) => {
  */
 app.get('/client-info', (_req, res) => {
     res.json({
-        mcpUrl: input.mcpUrl,
-        mcpTransportType: input.mcpTransportType,
-        systemPrompt: input.systemPrompt,
-        modelName: input.modelName,
+        mcpUrl: runtimeSettings.mcpUrl,
+        mcpTransportType: runtimeSettings.mcpTransportType,
+        systemPrompt: runtimeSettings.systemPrompt,
+        modelName: runtimeSettings.modelName,
         publicUrl,
         information: BASIC_INFORMATION,
     });
@@ -306,6 +316,95 @@ app.get('/available-tools', async (_req, res) => {
         return res.status(500).json({ error: 'Failed to fetch tools' });
     } finally {
         await cleanupClient();
+    }
+});
+
+/**
+ * GET /settings endpoint to retrieve current settings
+ */
+app.get('/settings', (_req, res) => {
+    res.json(runtimeSettings);
+});
+
+/**
+ * POST /settings endpoint to update settings
+ */
+app.post('/settings', async (req, res) => {
+    try {
+        const newSettings = req.body;
+        if (newSettings.mcpUrl !== undefined && !newSettings.mcpUrl) {
+            res.status(400).json({ success: false, error: 'MCP URL is required' });
+            return;
+        }
+        if (newSettings.modelName !== undefined && !newSettings.modelName) {
+            res.status(400).json({ success: false, error: 'Model name is required' });
+            return;
+        }
+        runtimeSettings = {
+            ...runtimeSettings,
+            ...newSettings,
+        };
+        await conversationManager.updateClientSettings({
+            systemPrompt: runtimeSettings.systemPrompt,
+            modelName: runtimeSettings.modelName,
+            modelMaxOutputTokens: runtimeSettings.modelMaxOutputTokens,
+            maxNumberOfToolCallsPerQuery: runtimeSettings.maxNumberOfToolCallsPerQuery,
+            toolCallTimeoutSec: runtimeSettings.toolCallTimeoutSec,
+        });
+
+        if (newSettings.mcpUrl !== undefined || newSettings.mcpTransportType !== undefined) {
+            if (client) {
+                try {
+                    await client.close();
+                } catch (err) {
+                    log.warning('Error closing client connection:', { error: err });
+                }
+                client = null;
+            }
+            // Next API request will create a new client with updated settings
+        }
+        res.json({ success: true });
+    } catch (error) {
+        log.error('Error updating settings:', { error: (error instanceof Error) ? error.message : String(error) });
+        res.status(500).json({ success: false, error: 'Failed to update settings' });
+    }
+});
+
+/**
+ * POST /settings/reset endpoint to reset settings to defaults
+ */
+app.post('/settings/reset', async (_req, res) => {
+    try {
+        runtimeSettings = {
+            mcpUrl: input.mcpUrl,
+            mcpTransportType: input.mcpTransportType,
+            systemPrompt: input.systemPrompt,
+            modelName: input.modelName,
+            modelMaxOutputTokens: input.modelMaxOutputTokens,
+            maxNumberOfToolCallsPerQuery: input.maxNumberOfToolCallsPerQuery,
+            toolCallTimeoutSec: input.toolCallTimeoutSec,
+        };
+        await conversationManager.updateClientSettings({
+            systemPrompt: runtimeSettings.systemPrompt,
+            modelName: runtimeSettings.modelName,
+            modelMaxOutputTokens: runtimeSettings.modelMaxOutputTokens,
+            maxNumberOfToolCallsPerQuery: runtimeSettings.maxNumberOfToolCallsPerQuery,
+            toolCallTimeoutSec: runtimeSettings.toolCallTimeoutSec,
+        });
+
+        // Close existing client to force recreation with default settings
+        if (client) {
+            try {
+                await client.close();
+            } catch (err) {
+                log.warning('Error closing client connection:', { error: err });
+            }
+            client = null;
+        }
+        res.json({ success: true });
+    } catch (error) {
+        log.error('Error resetting settings:', { error: (error instanceof Error) ? error.message : String(error) });
+        res.status(500).json({ success: false, error: 'Failed to reset settings' });
     }
 });
 
