@@ -158,7 +158,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             const result = await resp.json();
             if (result.success) {
-                showNotification('Settings updated successfully! Changes will apply to new conversations.', 'success');
+                showNotification('Settings updated successfully for the current session only. Settings will reset when the Actor is restarted.', 'success');
+                hideModal('settingsModal');
                 const clientInfoResp = await fetch('/client-info');
                 const clientInfoData = await clientInfoResp.json();
                 if (mcpUrl) mcpUrl.textContent = clientInfoData.mcpUrl;
@@ -204,6 +205,7 @@ function showNotification(message, type = 'info') {
     }
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
+    notification.style.marginBottom = '5px'; // Add 5px margin to bottom
     notification.textContent = message;
     chatLog.parentNode.insertBefore(notification, chatLog);
 
@@ -212,7 +214,7 @@ function showNotification(message, type = 'info') {
         if (notification.parentNode) {
             notification.remove();
         }
-    }, 5000);
+    }, 7000);
 }
 
 // ================== MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
@@ -590,33 +592,34 @@ function renderTools(tools) {
 }
 
 // ================== MODAL HANDLING ==================
+
+// Function to show a modal
+function showModal(modalId) {
+    const modalElement = document.getElementById(modalId);
+    if (modalElement) {
+        modalElement.style.display = 'block';
+        document.body.style.overflow = 'hidden'; // Prevent scrolling
+        // Refresh tools when tools modal is opened
+        if (modalId === 'toolsModal') {
+            fetchAvailableTools();
+        }
+    }
+}
+
+// Function to hide a modal
+function hideModal(modalId) {
+    const modalElement = document.getElementById(modalId);
+    if (modalElement) {
+        modalElement.style.display = 'none';
+        document.body.style.overflow = ''; // Restore scrolling
+    }
+}
+
 function setupModals() {
     // Get button elements
     const quickStartBtn = document.getElementById('quickStartBtn');
     const settingsBtn = document.getElementById('settingsBtn');
     const toolsBtn = document.getElementById('toolsBtn');
-
-    // Function to show a modal
-    function showModal(modalId) {
-        const modalElement = document.getElementById(modalId);
-        if (modalElement) {
-            modalElement.style.display = 'block';
-            document.body.style.overflow = 'hidden'; // Prevent scrolling
-            // Refresh tools when tools modal is opened
-            if (modalId === 'toolsModal') {
-                fetchAvailableTools();
-            }
-        }
-    }
-
-    // Function to hide a modal
-    function hideModal(modalId) {
-        const modalElement = document.getElementById(modalId);
-        if (modalElement) {
-            modalElement.style.display = 'none';
-            document.body.style.overflow = ''; // Restore scrolling
-        }
-    }
 
     // Add click handlers for modal buttons
     quickStartBtn.addEventListener('click', () => showModal('quickStartModal'));
