@@ -518,6 +518,19 @@ function setupModals() {
         }
     }
 
+    // Set up example question clicks
+    const exampleQuestions = document.querySelectorAll('#quickStartModal .modal-body ul li');
+    exampleQuestions.forEach((question) => {
+        question.addEventListener('click', () => {
+            const text = question.textContent.trim();
+            hideModal('quickStartModal');
+            queryInput.value = text;
+            queryInput.focus();
+            queryInput.style.height = 'auto';
+            queryInput.style.height = `${Math.min(queryInput.scrollHeight, 150)}px`;
+        });
+    });
+
     // Add click handlers for modal buttons
     quickStartBtn.addEventListener('click', () => showModal('quickStartModal'));
     settingsBtn.addEventListener('click', () => showModal('settingsModal'));

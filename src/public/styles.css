@@ -78,8 +78,7 @@ body {
 
 .header-actions {
     display: flex;
-    gap: 1rem;
-    align-items: center;
+    gap: 0.5rem;
 }
 
 .modal-buttons,
@@ -537,13 +536,12 @@ code {
 
 .modal-content {
     position: relative;
-    background-color: #fff;
+    background-color: var(--chat-bg);
     margin: 5% auto;
-    padding: 20px;
-    width: 80%;
-    max-width: 600px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 1.25rem;
+    width: clamp(300px, 80%, 1000px);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
     max-height: 80vh;
     overflow-y: auto;
 }
@@ -554,13 +552,13 @@ code {
     align-items: center;
     margin-bottom: 1rem;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .modal-header h3 {
     margin: 0;
     font-size: 1.2rem;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .close-modal {
@@ -568,17 +566,21 @@ code {
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
-    color: #666;
+    color: var(--text-secondary);
     padding: 0;
     line-height: 1;
 }
 
 .close-modal:hover {
-    color: #333;
+    color: var(--text-primary);
 }
 
 .modal-body {
     padding: 1rem 0;
+}
+
+.modal-body ul li {
+    list-style-type: none;
 }
 
 /* Header Actions */
@@ -595,9 +597,65 @@ code {
     color: #666;
     border-radius: 4px;
     transition: background-color 0.2s;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-btn i {
+    font-size: 1.1rem;
 }
 
 .icon-btn:hover {
     background-color: rgba(0, 0, 0, 0.05);
     color: #333;
-} 
+}
+
+/* Modal Styling - General */
+.modal-body h4 {
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+    font-size: 1rem;
+}
+
+.modal-header h3 i {
+    color: var(--primary-color);
+    margin-right: 0.5rem;
+}
+
+/* Quick Start Modal Styling */
+#quickStartModal .modal-body ul {
+    padding-left: 0.5rem;
+}
+
+#quickStartModal .modal-body ul li {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    background: var(--bg-color);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+#quickStartModal .modal-body ul li:hover {
+    background: #f8f9ff;
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+#quickStartModal .modal-body ul li i {
+    color: var(--primary-color);
+    margin-right: 0.75rem;
+    font-size: 0.875rem;
+}
+
+#quickStartModal .modal-header h3 i {
+    color: var(--primary-color);
+    margin-right: 0.5rem;
+}
