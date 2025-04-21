@@ -533,11 +533,15 @@ function setupModals() {
         });
     });
 
-    // Close modal when clicking outside
-    window.addEventListener('click', (event) => {
-        if (event.target.classList.contains('modal')) {
+    let mouseDownOnModal = false;
+    window.addEventListener('mousedown', (event) => {
+        mouseDownOnModal = event.target.classList.contains('modal');
+    });
+    window.addEventListener('mouseup', (event) => {
+        if (mouseDownOnModal && event.target.classList.contains('modal')) {
             hideModal(event.target.id);
         }
+        mouseDownOnModal = false;
     });
 
     // Close modal with Escape key
