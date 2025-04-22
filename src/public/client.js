@@ -621,6 +621,19 @@ function setupModals() {
     const settingsBtn = document.getElementById('settingsBtn');
     const toolsBtn = document.getElementById('toolsBtn');
 
+    // Set up example question clicks
+    const exampleQuestions = document.querySelectorAll('#quickStartModal .modal-body ul li');
+    exampleQuestions.forEach((question) => {
+        question.addEventListener('click', () => {
+            const text = question.textContent.trim();
+            hideModal('quickStartModal');
+            queryInput.value = text;
+            queryInput.focus();
+            queryInput.style.height = 'auto';
+            queryInput.style.height = `${Math.min(queryInput.scrollHeight, 150)}px`;
+        });
+    });
+
     // Add click handlers for modal buttons
     quickStartBtn.addEventListener('click', () => showModal('quickStartModal'));
     settingsBtn.addEventListener('click', () => showModal('settingsModal'));
@@ -636,11 +649,15 @@ function setupModals() {
         });
     });
 
-    // Close modal when clicking outside
-    window.addEventListener('click', (event) => {
-        if (event.target.classList.contains('modal')) {
+    let mouseDownOnModal = false;
+    window.addEventListener('mousedown', (event) => {
+        mouseDownOnModal = event.target.classList.contains('modal');
+    });
+    window.addEventListener('mouseup', (event) => {
+        if (mouseDownOnModal && event.target.classList.contains('modal')) {
             hideModal(event.target.id);
         }
+        mouseDownOnModal = false;
     });
 
     // Close modal with Escape key
