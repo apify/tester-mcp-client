@@ -26,3 +26,5 @@ export const Event = {
     OUTPUT_TOKENS_HAIKU_3_5: 'output-tokens-haiku-3-5',
     QUERY_ANSWERED: 'query-answered',
 };
+
+export const MAX_HISTORY_CONVERSATIONS = 10;

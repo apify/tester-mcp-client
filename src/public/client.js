@@ -266,6 +266,18 @@ function appendSingleBubble(role, content) {
 }
 
 /**
+ * isBase64(str): Returns true if the str is base64
+ */
+function isBase64(str) {
+    if (typeof str !== 'string') return false;
+    const s = str.trim();
+    // base64 must be multiple of 4 chars
+    if (!s || s.length % 4 !== 0) return false;
+    // only valid base64 chars + optional padding
+    return /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(s);
+}
+
+/**
  * appendToolBlock(item): Renders a separate row for tool_use/tool_result
  */
 function appendToolBlock(item) {
@@ -279,56 +291,69 @@ function appendToolBlock(item) {
         const inputContent = item.input ? formatAnyContent(item.input) : '<em>No input provided</em>';
         container.innerHTML = `
 <details class="tool-details">
-  <summary>
-    <div class="tool-header">
-      <div class="tool-icon">
-        <i class="fas fa-tools"></i>
-      </div>
-      <div class="tool-info">
-          <div class="tool-call">Tool call: ${item.name || 'N/A'}</div>
-      </div>
-      <div class="tool-status">
-        <i class="fas fa-chevron-down"></i>
-      </div>
+    <summary>
+        <div class="tool-header">
+            <div class="tool-icon">
+                <i class="fas fa-tools"></i>
+            </div>
+            <div class="tool-info">
+                <div class="tool-call">Tool call: ${item.name || 'N/A'}</div>
+            </div>
+            <div class="tool-status">
+                <i class="fas fa-chevron-down"></i>
+            </div>
+        </div>
+    </summary>
+    <div class="tool-content">
+        <div class="tool-input">
+            <div class="tool-label">Input:</div>
+            ${inputContent}
+        </div>
     </div>
-  </summary>
-  <div class="tool-content">
-    <div class="tool-input">
-      <div class="tool-label">Input:</div>
-      ${inputContent}
-    </div>
-  </div>
 </details>`;
     } else if (item.type === 'tool_result') {
-        const resultContent = item.content ? formatAnyContent(item.content) : '<em>No result available</em>';
-        let contentLength = 0;
-        if (item.content) {
-            contentLength = typeof item.content === 'string'
-                ? item.content.length
-                : JSON.stringify(item.content).length;
+        let resultHtml;
+        if (typeof item.content === 'string' && isBase64(item.content)) {
+            resultHtml = `
+            <div class="tool-image">
+                <img
+                    src="data:image/png;base64,${item.content}"
+                    style="max-width:100%; height:auto;"
+                    alt="Tool result image"
+                />
+            </div>`;
+        } else {
+            resultHtml = item.content
+                ? formatAnyContent(item.content)
+                : '<em>No result available</em>';
         }
+
+        const contentLength = typeof item.content === 'string'
+            ? item.content.length
+            : JSON.stringify(item.content || '').length;
+
         container.innerHTML = `
 <details class="tool-details">
-  <summary>
-    <div class="tool-header">
-      <div class="tool-icon">
-        <i class="fas fa-file-alt"></i>
-      </div>
-      <div class="tool-info">
-        <div class="tool-name">Tool result</div>
-        <div class="tool-meta">Length: ${contentLength} chars</div>
-      </div>
-      <div class="tool-status">
-        <i class="fas fa-chevron-down"></i>
-      </div>
+    <summary>
+        <div class="tool-header">
+            <div class="tool-icon">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <div class="tool-info">
+                <div class="tool-name">Tool result</div>
+                <div class="tool-meta">Length: ${contentLength} chars</div>
+            </div>
+            <div class="tool-status">
+                <i class="fas fa-chevron-down"></i>
+            </div>
+        </div>
+    </summary>
+    <div class="tool-content">
+        <div class="tool-result">
+            <div class="tool-label">${item.is_error ? 'Error Details:' : 'Result:'}</div>
+            ${resultHtml}
+        </div>
     </div>
-  </summary>
-  <div class="tool-content">
-    <div class="tool-result">
-      <div class="tool-label">${item.is_error ? 'Error Details:' : 'Result:'}</div>
-      ${resultContent}
-    </div>
-  </div>
 </details>`;
     }
 

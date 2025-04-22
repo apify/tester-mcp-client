@@ -11,6 +11,7 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
+import { MAX_HISTORY_CONVERSATIONS } from './const.js';
 import type { Tool, TokenCharger } from './types.js';
 
 if (typeof globalThis.EventSource === 'undefined') {
@@ -95,7 +96,7 @@ export class ConversationManager {
                 const response = await this.anthropic.messages.create({
                     model: this.modelName,
                     max_tokens: this.modelMaxOutputTokens,
-                    messages,
+                    messages: messages.slice(-MAX_HISTORY_CONVERSATIONS),
                     system: this.systemPrompt,
                     tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
                 });
@@ -189,7 +190,7 @@ export class ConversationManager {
                 try {
                     const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
                     if (results.content instanceof Array && results.content.length !== 0) {
-                        const text = results.content.map((x) => x.text);
+                        const text = results.content.map((x) => x.text ?? x.data);
                         msgUser.content[0].content = text.join('\n\n');
                     } else {
                         msgUser.content[0].content = `No results retrieved from ${params.name}`;
