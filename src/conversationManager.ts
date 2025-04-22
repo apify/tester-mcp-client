@@ -11,7 +11,6 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
-import { MAX_HISTORY_CONVERSATIONS } from './const.js';
 import type { Tool, TokenCharger } from './types.js';
 
 if (typeof globalThis.EventSource === 'undefined') {
