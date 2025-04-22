@@ -39,12 +39,11 @@ body {
     max-width: 1000px;
     margin: 1rem auto;
     padding: 0 1rem;
-    flex: 1;
     display: flex;
     flex-direction: column;
-    position: relative;
-    padding-bottom: 80px;
+    height: calc(100vh - 2rem);
     width: 100%;
+    position: relative;
 }
 
 .header {
@@ -204,8 +203,9 @@ body {
     margin-bottom: 0.75rem;
     box-shadow: var(--shadow-sm);
     overflow-y: auto;
-    height: calc(100vh - 250px);
+    min-height: 100px;
     width: 100%;
+    overflow-y: auto;
 }
 
 .message-row {
@@ -374,16 +374,12 @@ body {
 }
 
 #inputRow {
-    position: fixed;
+    position: sticky;
     bottom: 0;
-    left: 0;
-    right: 0;
     background: var(--bg-color);
-    padding: 1rem;
-    z-index: 100;
-    max-width: 1000px;
-    margin: 0 auto;
-    box-shadow: var(--shadow-md);
+    padding: 0;
+    z-index: 10;
+    margin-bottom: 1rem;
     width: 100%;
 }
 
@@ -395,6 +391,7 @@ body {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: 0.5rem;
+    box-shadow: none;
 }
 
 #queryInput {
@@ -402,13 +399,14 @@ body {
     padding: 0.75rem;
     font-size: 0.9375rem;
     min-height: 45px;
-    height: 45px;
+    height: auto;
     max-height: 150px;
     border: none;
     resize: none;
     overflow-y: auto;
     line-height: 1.5;
     background: transparent;
+    box-shadow: none;
 }
 
 #queryInput:focus {
@@ -529,7 +527,7 @@ code {
 .modal-content {
     position: relative;
     background-color: var(--chat-bg);
-    margin: 5% auto;
+    margin: 6% auto;
     padding: 1.25rem;
     width: clamp(300px, 80%, 1000px);
     border-radius: var(--radius-md);

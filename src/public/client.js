@@ -17,9 +17,6 @@ const toolsLoading = document.getElementById('toolsLoading');
 function scrollToBottom() {
     // Scroll the chat log
     chatLog.scrollTop = chatLog.scrollHeight;
-
-    // Also scroll the window to ensure we're at the bottom
-    window.scrollTo(0, document.body.scrollHeight);
 }
 
 const messages = []; // Local message array for display only
@@ -80,6 +77,7 @@ function reconnectSSE() {
 
 // Initial connection on a page load
 document.addEventListener('DOMContentLoaded', async () => {
+    appendMessage('internal', 'Connecting to MCP server...');
     // Fetch client info first
     try {
         const resp = await fetch('/client-info');
@@ -451,7 +449,7 @@ clearBtn.addEventListener('click', async () => {
             appendMessage('internal', 'Failed to clear conversation. Please try again.');
         } else {
             console.log('Server conversation reset');
-            appendMessage('internal', 'Conversation cleared successfully.');
+            // appendMessage('internal', 'Conversation cleared successfully.');
         }
     } catch (err) {
         console.error('Error resetting conversation:', err);
@@ -498,12 +496,16 @@ sendBtn.addEventListener('click', () => {
     if (query) {
         sendQuery(query);
         queryInput.value = '';
+        queryInput.style.height = 'auto';
     }
 });
 
 queryInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-        sendBtn.click();
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendBtn.click();
+        }
     }
 });
 
