@@ -33,29 +33,51 @@ body {
     padding: 0;
     display: flex;
     flex-direction: column;
-    padding-bottom: 100px;
+    padding-bottom: 0;
+    overflow-y: auto; /* Changed from hidden to allow scrolling */
 }
 
 #chatContainer {
     max-width: 1000px;
-    margin: 1rem auto;
+    margin: 0 auto;
     padding: 0 1rem;
     display: flex;
     flex-direction: column;
     width: 100%;
     position: relative;
-    min-height: calc(100vh - 2rem);
+    min-height: 100vh;
+    padding-top: calc(4rem + 20px);
+    padding-bottom: calc(4rem + 30px);
 }
 
 .header {
-    margin-bottom: 1rem;
+    margin-bottom: 0;
     background: var(--chat-bg);
     border-radius: var(--radius-md);
     padding: 1rem;
     box-shadow: var(--shadow-sm);
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 100;
+    max-width: 1000px;
+    width: calc(100% - 2rem);
+    margin-top: 1rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* This is for the backgroung for the top of the header */
+.header::before {
+    content: '';
+    position: absolute;
+    top: -1rem;
+    left: 0;
+    right: 0;
+    height: 1rem;
+    background: var(--bg-color);
+    z-index: -1;
 }
 
 .header-content {
@@ -204,10 +226,11 @@ body {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     padding: 1rem;
-    margin-bottom: 0.75rem;
+    margin-top: 1rem;
     box-shadow: var(--shadow-sm);
-    min-height: 100px;
     width: 100%;
+    position: relative;
+    overflow-y: visible;
 }
 
 .message-row {
@@ -497,6 +520,8 @@ code {
     #chatContainer {
         margin: 0;
         padding: 0.5rem;
+        padding-top: calc(4rem + 10px);
+        padding-bottom: calc(3.5rem + 10px);
     }
 
     .bubble {
@@ -508,7 +533,7 @@ code {
     }
 
     #inputRow {
-        padding: 0.5rem;
+        padding: 0 0.5rem 0.5rem 0.5rem;
     }
 
     .send-btn {
@@ -518,6 +543,15 @@ code {
 
     .tool-block {
         padding: 0.75rem;
+    }
+
+    .header {
+        width: calc(100% - 1rem);
+    }
+    
+    #chatLog {
+        margin-left: 0.5rem;
+        margin-right: 0.5rem;
     }
 }
 
