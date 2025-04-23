@@ -33,6 +33,7 @@ body {
     padding: 0;
     display: flex;
     flex-direction: column;
+    padding-bottom: 100px;
 }
 
 #chatContainer {
@@ -41,9 +42,9 @@ body {
     padding: 0 1rem;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 2rem);
     width: 100%;
     position: relative;
+    min-height: calc(100vh - 2rem);
 }
 
 .header {
@@ -202,10 +203,8 @@ body {
     padding: 1rem;
     margin-bottom: 0.75rem;
     box-shadow: var(--shadow-sm);
-    overflow-y: auto;
     min-height: 100px;
     width: 100%;
-    overflow-y: auto;
 }
 
 .message-row {
@@ -374,13 +373,17 @@ body {
 }
 
 #inputRow {
-    position: sticky;
+    position: fixed;
     bottom: 0;
+    left: 0;
+    right: 0;
     background: var(--bg-color);
-    padding: 0;
+    padding: 0 1rem 1rem 1rem;
     z-index: 10;
-    margin-bottom: 1rem;
     width: 100%;
+    display: flex;
+    justify-content: center;
+    margin: 0 auto;
 }
 
 .input-wrapper {
@@ -391,7 +394,10 @@ body {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: 0.5rem;
-    box-shadow: none;
+    box-shadow: var(--shadow-sm);
+    max-width: 1000px;
+    width: 100%;
+    margin: 0 auto;
 }
 
 #queryInput {
@@ -405,7 +411,7 @@ body {
     resize: none;
     overflow-y: auto;
     line-height: 1.5;
-    background: transparent;
+    border-radius: var(--radius-md);
     box-shadow: none;
 }
 
