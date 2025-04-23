@@ -53,6 +53,9 @@ body {
     border-radius: var(--radius-md);
     padding: 1rem;
     box-shadow: var(--shadow-sm);
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
 .header-content {
