@@ -4,19 +4,24 @@
  */
 
 import { Anthropic } from '@anthropic-ai/sdk';
-import type { Message, MessageParam, ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
+import type { ContentBlockParam, Message, MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { ListToolsResult, Notification } from '@modelcontextprotocol/sdk/types.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
-import type { Tool, TokenCharger } from './types.js';
-import { fixConversation } from './utils.js';
+import type { TokenCharger, Tool } from './types.js';
+import { pruneAndFixConversation } from './utils.js';
 
 if (typeof globalThis.EventSource === 'undefined') {
     globalThis.EventSource = EventSource as unknown as typeof globalThis.EventSource;
 }
+
+// Define a default, can be overridden in constructor
+const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
+// Define a safety margin (e.g., 10%) to avoid edge cases
+const CONTEXT_TOKEN_SAFETY_MARGIN = 0.9;
 
 export class ConversationManager {
     private conversation: MessageParam[] = [];
@@ -28,6 +33,7 @@ export class ConversationManager {
     private toolCallTimeoutSec: number;
     private readonly tokenCharger: TokenCharger | null;
     private tools: Tool[] = [];
+    private readonly maxContextTokens: number;
 
     constructor(
         systemPrompt: string,
@@ -37,6 +43,7 @@ export class ConversationManager {
         maxNumberOfToolCallsPerQuery: number,
         toolCallTimeoutSec: number,
         tokenCharger: TokenCharger | null = null,
+        maxContextTokens: number = DEFAULT_MAX_CONTEXT_TOKENS,
     ) {
         this.systemPrompt = systemPrompt;
         this.modelName = modelName;
@@ -45,6 +52,7 @@ export class ConversationManager {
         this.toolCallTimeoutSec = toolCallTimeoutSec;
         this.tokenCharger = tokenCharger;
         this.anthropic = new Anthropic({ apiKey });
+        this.maxContextTokens = Math.floor(maxContextTokens * CONTEXT_TOKEN_SAFETY_MARGIN);
     }
 
     resetConversation() {
@@ -85,21 +93,149 @@ export class ConversationManager {
         return true;
     }
 
+    // /**
+    //  * Adds fake tool_result messages for tool_use messages that don't have a corresponding tool_result message.
+    //  * @returns
+    //  */
+    // private fixToolResult() {
+    //     // Storing both in case the messages are in the wrong order
+    //     const toolUseIDs = new Set<string>();
+    //     const toolResultIDs = new Set<string>();
+    //
+    //     for (let m = 0; m < this.conversation.length; m++) {
+    //         const message = this.conversation[m];
+    //
+    //         if (typeof message.content === 'string') continue;
+    //
+    //         // Handle messages with content blocks
+    //         const contentBlocks = message.content as ContentBlockParam[];
+    //         for (let i = 0; i < contentBlocks.length; i++) {
+    //             const block = contentBlocks[i];
+    //             if (block.type === 'tool_use') {
+    //                 toolUseIDs.add(block.id);
+    //             } else if (block.type === 'tool_result') {
+    //                 toolResultIDs.add(block.tool_use_id);
+    //             }
+    //         }
+    //     }
+    //     const toolUseIDsWithoutResult = Array.from(toolUseIDs).filter((id) => !toolResultIDs.has(id));
+    //
+    //     if (toolUseIDsWithoutResult.length < 1) {
+    //         return;
+    //     }
+    //
+    //     const fixedConversation: MessageParam[] = [];
+    //     for (let m = 0; m < this.conversation.length; m++) {
+    //         const message = this.conversation[m];
+    //
+    //         fixedConversation.push(message);
+    //         // Handle messages with content blocks
+    //         if (typeof message.content === 'string') continue;
+    //
+    //         const contentBlocks = message.content as ContentBlockParam[];
+    //         for (let i = 0; i < contentBlocks.length; i++) {
+    //             const block = contentBlocks[i];
+    //             if (block.type === 'tool_use' && toolUseIDsWithoutResult.includes(block.id)) {
+    //                 log.debug(`Adding fake tool_result message for tool_use with ID: ${block.id}`);
+    //                 fixedConversation.push({
+    //                     role: 'user',
+    //                     content: [
+    //                         {
+    //                             type: 'tool_result',
+    //                             tool_use_id: block.id,
+    //                             content: '[Tool use without result - most likely tool failed or response was too large to be sent to LLM]',
+    //                         },
+    //                     ],
+    //                 });
+    //             }
+    //         }
+    //     }
+    //     this.conversation = fixedConversation;
+    // }
+
+    /**
+     * Count the number of tokens in the conversation history using Anthropic's API.
+     * @returns The number of tokens in the conversation.
+     */
+    private async countTokens(messages: MessageParam[]): Promise<number> {
+        if (this.conversation.length === 0) {
+            return 0;
+        }
+        try {
+            const response = await this.anthropic.messages.countTokens({
+                model: this.modelName,
+                messages,
+                system: this.systemPrompt,
+                tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
+            });
+            return response.input_tokens ?? 0;
+        } catch (error) {
+            log.warning(`Error counting tokens: ${error instanceof Error ? error.message : String(error)}`);
+            return Infinity;
+        }
+    }
+
+    /**
+     * Ensures the conversation history does not exceed the maximum token limit.
+     * Removes oldest messages if necessary.
+     */
+    private async ensureContextWindowLimit(): Promise<void> {
+        if (this.conversation.length <= 1) {
+            return;
+        }
+
+        let currentTokens = await this.countTokens(this.conversation);
+        if (currentTokens <= this.maxContextTokens) {
+            log.info(`[Context Truncation] Current token count (${currentTokens}) is within limit (${this.maxContextTokens}). No truncation needed.`);
+            return;
+        }
+
+        log.info(`[Context Truncation] Current token count (${currentTokens}) exceeds limit (${this.maxContextTokens}). Truncating conversation...`);
+        const initialMessagesCount = this.conversation.length;
+
+        while (currentTokens > this.maxContextTokens && this.conversation.length > 1) {
+            try {
+                this.conversation.shift(); // Remove the oldest message
+                this.conversation = pruneAndFixConversation(this.conversation);
+                // if the oldest message is a tool result, remove the corresponding tool message as well
+                if (this.conversation.length > 1) {
+                    const firstMessage = this.conversation[0];
+                    if (Array.isArray(firstMessage.content) && firstMessage.content[0]?.type === 'tool_result') {
+                        this.conversation.shift();
+                    }
+                }
+                currentTokens = await this.countTokens(this.conversation);
+                // Wait for a short period to avoid hitting the API too quickly
+                await new Promise<void>((resolve) => {
+                    setTimeout(() => resolve(), 5);
+                });
+            } catch (error) {
+                log.error(`Error during context window limit check: ${error instanceof Error ? error.message : String(error)}`);
+                break;
+            }
+        }
+        log.info(`[Context Truncation] Finished. Removed ${initialMessagesCount - this.conversation.length} messages. `
+                  + `Current token count: ${currentTokens}. Messages remaining: ${this.conversation.length}.`);
+        // This is here mostly like a safety net, but it should not be needed
+        this.conversation = pruneAndFixConversation(this.conversation);
+    }
+
     private async createMessageWithRetry(
-        messages: MessageParam[],
         maxRetries = 3,
         retryDelayMs = 2000, // 2 seconds
     ): Promise<Message> {
+        // Check context window before API call
+        // TODO pruneAndFix could be a class function, I had it there but I had to revert because of images size
+        this.conversation = pruneAndFixConversation(this.conversation);
+        await this.ensureContextWindowLimit();
+
         let lastError: Error | null = null;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 const response = await this.anthropic.messages.create({
                     model: this.modelName,
                     max_tokens: this.modelMaxOutputTokens,
-                    // TODO if we are not careful with slice, we can remove message and get this error
-                    // 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.0: unexpected tool_use_id found in tool_result
-                    // messages: messages.slice(-MAX_HISTORY_CONVERSATIONS),
-                    messages: fixConversation(messages),
+                    messages: this.conversation,
                     system: this.systemPrompt,
                     tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
                 });
@@ -117,8 +253,8 @@ export class ConversationManager {
                             const delay = attempt * retryDelayMs;
                             const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
                             log.debug(`${errorType} hit, attempt ${attempt}/${maxRetries}. Retrying in ${delay / 1000} seconds...`);
-                            await new Promise((resolve) => {
-                                setTimeout(resolve, delay);
+                            await new Promise<void>((resolve) => {
+                                setTimeout(() => resolve(), delay);
                             });
                             continue;
                         } else {
@@ -134,7 +270,7 @@ export class ConversationManager {
                 throw error;
             }
         }
-        throw lastError;
+        throw lastError ?? new Error('Unknown error after retries in createMessageWithRetry');
     }
 
     async handleLLMResponse(client: Client, response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCount = 0) {
@@ -149,7 +285,7 @@ export class ConversationManager {
                         You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
                     this.conversation.push({ role: 'assistant', content: msg });
                     sseEmit('assistant', msg);
-                    const finalResponse = await this.createMessageWithRetry(this.conversation);
+                    const finalResponse = await this.createMessageWithRetry();
                     this.conversation.push({ role: 'assistant', content: finalResponse.content || '' });
                     sseEmit('assistant', finalResponse.content || '');
                     return;
@@ -169,7 +305,7 @@ export class ConversationManager {
                     content: [{
                         tool_use_id: block.id,
                         type: 'tool_result' as const,
-                        content: '',
+                        content: '', // Placeholder, filled below
                         is_error: false,
                     }],
                 };
@@ -192,7 +328,7 @@ export class ConversationManager {
                 sseEmit(msgUser.role, msgUser.content);
                 // Get next response from Claude
                 log.debug('[internal] Get model response from tool result');
-                const nextResponse: Message = await this.createMessageWithRetry(this.conversation);
+                const nextResponse: Message = await this.createMessageWithRetry();
                 log.debug('[internal] Received response from model');
                 await this.handleLLMResponse(client, nextResponse, sseEmit, toolCallCount + 1);
                 log.debug('[internal] Finished processing tool result');
@@ -211,7 +347,7 @@ export class ConversationManager {
         this.conversation.push({ role: 'user', content: query });
 
         try {
-            const response = await this.createMessageWithRetry(this.conversation);
+            const response = await this.createMessageWithRetry();
             log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
             log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
             await this.handleLLMResponse(client, response, sseEmit);
