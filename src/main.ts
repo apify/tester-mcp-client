@@ -11,6 +11,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import type { MessageParam } from '@anthropic-ai/sdk/resources/index.js';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { Actor } from 'apify';
 import cors from 'cors';
@@ -18,7 +19,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 
 import { createClient } from './clientFactory.js';
-import { BASIC_INFORMATION, Event } from './const.js';
+import { BASIC_INFORMATION, CONVERSATION_RECORD_NAME, Event } from './const.js';
 import { ConversationManager } from './conversationManager.js';
 import { processInput, getChargeForTokens } from './input.js';
 import { log } from './logger.js';
@@ -125,6 +126,8 @@ const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
+const persistedConversation = (await Actor.getValue<MessageParam[]>(CONVERSATION_RECORD_NAME)) ?? [];
+
 const conversationManager = new ConversationManager(
     input.systemPrompt,
     input.modelName,
@@ -133,7 +136,14 @@ const conversationManager = new ConversationManager(
     input.maxNumberOfToolCallsPerQuery,
     input.toolCallTimeoutSec,
     getChargeForTokens() ? new ActorTokenCharger() : null,
+    persistedConversation,
 );
+
+// This should not be needed, but just in case
+Actor.on('migrating', async () => {
+    log.debug(`Migrating ... persisting conversation.`);
+    await Actor.setValue(CONVERSATION_RECORD_NAME, conversationManager.getConversation());
+});
 
 // Only one browser client can be connected at a time
 type BrowserSSEClient = { id: number; res: express.Response };
@@ -293,9 +303,10 @@ app.get('/check-actor-timeout', (_req, res) => {
 /**
  * POST /conversation/reset to reset the conversation
  */
-app.post('/conversation/reset', (_req, res) => {
+app.post('/conversation/reset', async (_req, res) => {
     log.debug('Resetting conversation');
     conversationManager.resetConversation();
+    await Actor.setValue(CONVERSATION_RECORD_NAME, conversationManager.getConversation());
     res.json({ ok: true });
 });
 
@@ -406,6 +417,10 @@ app.post('/settings/reset', async (_req, res) => {
     }
 });
 
+app.get('/conversation', (_req, res) => {
+    res.json(conversationManager.getConversation());
+});
+
 app.get('*', (_req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
@@ -414,8 +429,9 @@ app.get('*', (_req, res) => {
  * Broadcasts an event to all connected SSE clients
  */
 async function broadcastSSE(data: object) {
-    log.debug('Push data into Apify dataset');
+    log.debug('Push data into Apify dataset and persist conversation');
     await Actor.pushData(data);
+    await Actor.setValue(CONVERSATION_RECORD_NAME, conversationManager.getConversation());
 
     log.debug(`Broadcasting message to ${browserClients.length} clients`);
     const message = `data: ${JSON.stringify(data)}\n\n`;
@@ -427,6 +443,5 @@ async function broadcastSSE(data: object) {
 app.listen(PORT, async () => {
     log.info(`Serving from ${path.join(publicPath, 'index.html')}`);
     const msg = `Navigate to ${publicUrl} to interact with the chat UI.`;
-    log.info(msg);
-    await Actor.pushData({ content: msg, role: publicUrl });
+    await Actor.setStatusMessage(msg);
 });

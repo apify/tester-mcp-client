@@ -43,6 +43,7 @@ export class ConversationManager {
         maxNumberOfToolCallsPerQuery: number,
         toolCallTimeoutSec: number,
         tokenCharger: TokenCharger | null = null,
+        persistedConversation: MessageParam[] = [],
         maxContextTokens: number = DEFAULT_MAX_CONTEXT_TOKENS,
     ) {
         this.systemPrompt = systemPrompt;
@@ -52,7 +53,12 @@ export class ConversationManager {
         this.toolCallTimeoutSec = toolCallTimeoutSec;
         this.tokenCharger = tokenCharger;
         this.anthropic = new Anthropic({ apiKey });
+        this.conversation = [...persistedConversation];
         this.maxContextTokens = Math.floor(maxContextTokens * CONTEXT_TOKEN_SAFETY_MARGIN);
+    }
+
+    getConversation(): MessageParam[] {
+        return this.conversation;
     }
 
     resetConversation() {

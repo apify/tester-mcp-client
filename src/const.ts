@@ -27,4 +27,4 @@ export const Event = {
     QUERY_ANSWERED: 'query-answered',
 };
 
-export const MAX_HISTORY_CONVERSATIONS = 10;
+export const CONVERSATION_RECORD_NAME = 'CONVERSATION';

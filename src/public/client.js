@@ -150,6 +150,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    try {
+        const response = await fetch('/conversation');
+        if (response.ok) {
+            const conversation = await response.json();
+            conversation.forEach(({ role, content }) => {
+                appendMessage(role, content);
+            });
+            scrollToBottom();
+        }
+    } catch (err) {
+        console.warn('Could not load prior conversation:', err);
+    }
+
     setupModals();
     // Initial fetch of tools
     await fetchAvailableTools();
