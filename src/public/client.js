@@ -9,7 +9,7 @@ const information = document.getElementById('information');
 const mcpUrl = document.getElementById('mcpUrl');
 const queryInput = document.getElementById('queryInput');
 const sendBtn = document.getElementById('sendBtn');
-const pingMcpServerBtn = document.getElementById('pingMcpServerBtn');
+const reconnectMcpServerBtn = document.getElementById('reconnectMcpServerButton');
 const toolsContainer = document.getElementById('availableTools');
 const toolsLoading = document.getElementById('toolsLoading');
 
@@ -60,7 +60,7 @@ function handleSSEError(err) {
         // Attempt to reconnect after a delay
         setTimeout(() => createSSEConnection(false), sseReconnectDelay);
     } else {
-        appendMessage('internal', 'Maximum reconnection attempts reached. Try clicking the "Ping MCP Server" button in the toolbar or refresh the page.');
+        appendMessage('internal', 'Maximum reconnection attempts reached. Try clicking the "Reconnect MCP Server" button in the toolbar or refresh the page.');
     }
 }
 
@@ -572,28 +572,28 @@ async function reconnectAndPing() {
     try {
         // Force a new connection attempt
         createSSEConnection(false, true);
-        const resp = await fetch('/ping-mcp-server');
+        const resp = await fetch('/reconnect-mcp-server');
         const data = await resp.json();
         console.log('Ping response:', data);
         if (data.status !== true && data.status !== 'OK') {
             appendMessage('internal', 'Not connected');
         }
     } catch (err) {
-        appendMessage('internal', `Error pinging MCP server: ${err.message}`);
+        appendMessage('internal', `Error reconnecting to MCP server: ${err.message}`);
     }
 }
 
 // Add click handler for reconnect button
-pingMcpServerBtn.addEventListener('click', async () => {
+reconnectMcpServerBtn.addEventListener('click', async () => {
     try {
         // Add visual feedback
-        pingMcpServerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        pingMcpServerBtn.disabled = true;
+        reconnectMcpServerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        reconnectMcpServerBtn.disabled = true;
         await reconnectAndPing();
     } finally {
         // Reset button state
-        pingMcpServerBtn.innerHTML = '<i class="fas fa-satellite-dish"></i>';
-        pingMcpServerBtn.disabled = false;
+        reconnectMcpServerBtn.innerHTML = '<i class="fas fa-satellite-dish"></i>';
+        reconnectMcpServerBtn.disabled = false;
     }
 });
 

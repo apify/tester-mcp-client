@@ -244,7 +244,7 @@ app.post('/message', async (req, res) => {
 /**
  * Periodically check if the main server is still reachable.
  */
-app.get('/ping-mcp-server', async (_req, res) => {
+app.get('/reconnect-mcp-server', async (_req, res) => {
     try {
         const mcpClient = await getOrCreateClient();
         await mcpClient.ping();
