@@ -12,7 +12,7 @@ export function isBase64(str: string): boolean {
 }
 
 /**
-* Prunes base64 encoded messages from the conversation and replaces them with a placeholde to save context tokens.
+* Prunes base64 encoded messages from the conversation and replaces them with a placeholder to save context tokens.
 * Also adds dummy tool_result messages for tool_use messages that don't have a corresponding tool_result message.
 * @param conversation
 * @returns
