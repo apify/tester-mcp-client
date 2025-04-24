@@ -33,7 +33,6 @@ body {
     padding: 0;
     display: flex;
     flex-direction: column;
-    padding-bottom: 0;
     overflow-y: auto; /* Changed from hidden to allow scrolling */
 }
 
@@ -167,10 +166,15 @@ body {
     border-color: #ef4444;
 }
 
-/* Special hover for ping button */
-#pingMcpServerBtn:hover {
-    color: #10b981; /* Green for status/connection actions */
+/* Reconnect button states */
+#reconnectMcpServerButton.connected {
+    color: #10b981;
     border-color: #10b981;
+}
+
+#reconnectMcpServerButton.disconnected {
+    color: #ef4444;
+    border-color: #ef4444;
 }
 
 .info-panels {
@@ -548,7 +552,7 @@ code {
     .header {
         width: calc(100% - 1rem);
     }
-    
+
     #chatLog {
         margin-left: 0.5rem;
         margin-right: 0.5rem;
@@ -754,7 +758,7 @@ textarea.form-control {
 
 .notification.success {
     background-color: #dcfce7;
-    border-left-color: #22c55e; 
+    border-left-color: #22c55e;
     color: #166534;
 }
 

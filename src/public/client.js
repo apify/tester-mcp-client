@@ -9,7 +9,7 @@ const information = document.getElementById('information');
 const mcpUrl = document.getElementById('mcpUrl');
 const queryInput = document.getElementById('queryInput');
 const sendBtn = document.getElementById('sendBtn');
-const pingMcpServerBtn = document.getElementById('pingMcpServerBtn');
+const reconnectMcpServerBtn = document.getElementById('reconnectMcpServerButton');
 const toolsContainer = document.getElementById('availableTools');
 const toolsLoading = document.getElementById('toolsLoading');
 
@@ -22,10 +22,12 @@ function scrollToBottom() {
 const messages = []; // Local message array for display only
 const actorTimeoutCheckDelay = 60_000; // 60 seconds between checks
 let timeoutCheckInterval = null; // Will store the interval ID
-const sseReconnectDelay = 10_000; // 10 seconds before reconnecting
+let eventSource = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 3; // Reduced to 3 attempts
+const sseReconnectDelay = 3000; // 3 seconds between attempts
 
 // ================== SSE CONNECTION SETUP ==================
-let eventSource = new EventSource('/sse');
 
 // Function to handle incoming SSE messages
 function handleSSEMessage(event) {
@@ -42,34 +44,78 @@ function handleSSEMessage(event) {
 // Function to handle SSE errors
 function handleSSEError(err) {
     console.error('SSE error:', err);
-    const errorMessage = err instanceof Error ? err.message : 'Connection lost from Browser to MCP-tester-client server. Attempting to reconnect...';
+    const errorMessage = err instanceof Error ? err.message : 'Connection lost from Browser to MCP-tester-client server.';
     console.log(errorMessage);
-    appendMessage('internal', errorMessage);
 
-    // Close the current connection
-    eventSource.close();
-
-    // Attempt to reconnect after a delay
-    setTimeout(reconnectSSE, sseReconnectDelay);
+    // Close the current connection if it exists
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+    }
+    reconnectMcpServerBtn.classList.remove('connected');
+    reconnectMcpServerBtn.classList.add('disconnected');
+    // Only show the reconnection message if we haven't exceeded max attempts
+    if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        const attemptNum = reconnectAttempts;
+        appendMessage('internal', `${errorMessage} Attempting to reconnect (${attemptNum}/${maxReconnectAttempts})`);
+        // Attempt to reconnect after a delay
+        setTimeout(() => createSSEConnection(false), sseReconnectDelay);
+    } else {
+        appendMessage('internal', 'Maximum reconnection attempts reached. Try clicking the "Reconnect MCP Server" button in the toolbar or refresh the page.');
+    }
 }
 
-eventSource.onmessage = handleSSEMessage;
-eventSource.onerror = handleSSEError;
-
-function reconnectSSE() {
-    const newEventSource = new EventSource('/sse');
-
-    newEventSource.onopen = () => {
-        appendMessage('internal', 'Connection restored!');
-        eventSource = newEventSource; // Update the global eventSource reference
-
-        // Reattach message and error handlers
+/**
+ * Unified function to create an SSE connection
+ * @param {boolean} isInitial - Whether this is an initial connection (resets reconnect attempts)
+ * @param {boolean} force - Whether to force a connection attempt regardless of max attempts
+ * @returns {boolean} - Whether a new connection was successfully initiated
+ */
+function createSSEConnection(isInitial = true, force = false) {
+    // Check for max reconnect attempts unless forced
+    if (!isInitial && !force && reconnectAttempts >= maxReconnectAttempts) {
+        appendMessage('internal', 'Connection failed. Please try clicking the "Reconnect" button in the toolbar or refresh the page.');
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+        reconnectMcpServerBtn.classList.remove('connected');
+        reconnectMcpServerBtn.classList.add('disconnected');
+        return false;
+    }
+    // Reset reconnect attempts for initial connections
+    if (isInitial) {
+        reconnectAttempts = 0;
+    }
+    // Close any existing connection before creating a new one
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+    }
+    try {
+        // Create new connection
+        eventSource = new EventSource('/sse');
         eventSource.onmessage = handleSSEMessage;
         eventSource.onerror = handleSSEError;
-    };
-
-    newEventSource.onerror = handleSSEError; // Reuse the same error handler
+        eventSource.onopen = () => {
+            console.log('SSE connection opened successfully');
+            appendMessage('internal', 'Connected to MCP server!');
+            reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+            reconnectMcpServerBtn.classList.remove('disconnected');
+            reconnectMcpServerBtn.classList.add('connected');
+        };
+        return true;
+    } catch (err) {
+        console.error('Error creating SSE connection:', err);
+        appendMessage('internal', `Failed to establish connection: ${err.message}`);
+        reconnectMcpServerBtn.classList.remove('connected');
+        reconnectMcpServerBtn.classList.add('disconnected');
+        return false;
+    }
 }
+// Call setup on a page load
+createSSEConnection(true);
 
 // ================== ON PAGE LOAD (DOMContentLoaded) ==================
 //  - Fetch client info
@@ -77,8 +123,6 @@ function reconnectSSE() {
 
 // Initial connection on a page load
 document.addEventListener('DOMContentLoaded', async () => {
-    appendMessage('internal', 'Connecting to MCP server...');
-    // Fetch client info first
     try {
         const resp = await fetch('/client-info');
         const data = await resp.json();
@@ -107,8 +151,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     setupModals();
-    // Call ping on a page load
-    await pingMcpServer();
     // Initial fetch of tools
     await fetchAvailableTools();
 });
@@ -474,7 +516,6 @@ clearBtn.addEventListener('click', async () => {
             appendMessage('internal', 'Failed to clear conversation. Please try again.');
         } else {
             console.log('Server conversation reset');
-            // appendMessage('internal', 'Conversation cleared successfully.');
         }
     } catch (err) {
         console.error('Error resetting conversation:', err);
@@ -534,33 +575,33 @@ queryInput.addEventListener('keydown', (e) => {
     }
 });
 
-// Add ping function
-async function pingMcpServer() {
+// Add ping function to check MCP server connection status
+async function reconnectAndPing() {
     try {
-        const resp = await fetch('/ping-mcp-server');
+        // Force a new connection attempt
+        createSSEConnection(false, true);
+        const resp = await fetch('/reconnect-mcp-server');
         const data = await resp.json();
-        if (data.status === true || data.status === 'OK') {
-            appendMessage('internal', 'Successfully connected to MCP server');
-        } else {
-            appendMessage('internal', `${data.error}`);
+        console.log('Ping response:', data);
+        if (data.status !== true && data.status !== 'OK') {
+            appendMessage('internal', 'Not connected');
         }
     } catch (err) {
-        appendMessage('internal', `Error pinging MCP server: ${err.message}`);
+        appendMessage('internal', `Error reconnecting to MCP server: ${err.message}`);
     }
 }
 
 // Add click handler for reconnect button
-pingMcpServerBtn.addEventListener('click', async () => {
+reconnectMcpServerBtn.addEventListener('click', async () => {
     try {
         // Add visual feedback
-        pingMcpServerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        pingMcpServerBtn.disabled = true;
-
-        await pingMcpServer();
+        reconnectMcpServerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        reconnectMcpServerBtn.disabled = true;
+        await reconnectAndPing();
     } finally {
         // Reset button state
-        pingMcpServerBtn.innerHTML = '<i class="fas fa-satellite-dish"></i>';
-        pingMcpServerBtn.disabled = false;
+        reconnectMcpServerBtn.innerHTML = '<i class="fas fa-satellite-dish"></i>';
+        reconnectMcpServerBtn.disabled = false;
     }
 });
 
