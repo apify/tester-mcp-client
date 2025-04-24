@@ -243,10 +243,14 @@ app.post('/message', async (req, res) => {
         log.info(`Charged query answered event`);
 
         await cleanupClient();
+        // Send a finished flag
+        await broadcastSSE({ role: 'system', content: '', finished: true });
         return res.json({ ok: true });
     } catch (err) {
         const error = err as Error;
         log.exception(error, `Error in processing user query: ${query}`);
+        // Send finished flag with error
+        await broadcastSSE({ role: 'system', content: error.message, finished: true, error: true });
         return res.json({ ok: false, error: error.message });
     }
 });

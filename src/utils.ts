@@ -15,6 +15,7 @@ export function isBase64(str: string): boolean {
 /**
 * Prunes base64 encoded messages from the conversation and replaces them with a placeholder to save context tokens.
 * Also adds fake tool_result messages for tool_use messages that don't have a corresponding tool_result message.
+* Ensures tool_result blocks reference valid tool_use IDs.
 * @param conversation
 * @returns
 */
@@ -77,40 +78,42 @@ export function pruneAndFixConversation(conversation: MessageParam[]): MessagePa
         }
     }
 
-    // Remove tool_use messages without corresponding tool_result messages
-    // const toolUseIDsWithoutResult = toolUseIDs.difference(toolResultIDs);
+    // Find tool_result blocks without corresponding tool_use blocks
+    const toolResultIDsWithoutUse = Array.from(toolResultIDs).filter((id) => !toolUseIDs.has(id));
+    // Find tool_use blocks without corresponding tool_result blocks
     const toolUseIDsWithoutResult = Array.from(toolUseIDs).filter((id) => !toolResultIDs.has(id));
 
-    if (toolUseIDsWithoutResult.length < 1) {
+    if (toolUseIDsWithoutResult.length === 0 && toolResultIDsWithoutUse.length === 0) {
         return prunedConversation;
     }
 
+    const fixedConversation: MessageParam[] = [];
     for (let m = 0; m < prunedConversation.length; m++) {
         const message = prunedConversation[m];
+        fixedConversation.push(message);
 
-        // Skip messages that are not tool_use
         if (typeof message.content === 'string') continue;
 
-        // Handle messages with content blocks
         const contentBlocks = message.content as ContentBlockParam[];
         for (let i = 0; i < contentBlocks.length; i++) {
             const block = contentBlocks[i];
-
-            if (block.type === 'tool_use' && toolUseIDsWithoutResult.includes(block.id)) {
-                log.debug(`Adding fake tool_result message for tool_use with ID: ${block.id}`);
-                prunedConversation.push({
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'tool_result',
-                            tool_use_id: block.id,
-                            content: '[Tool use without result - reason unknown, most likely tool failed]',
-                        },
-                    ],
-                });
+            if (block.type === 'tool_use') {
+                const toolUseId = (block as ContentBlockParam & { id: string }).id;
+                if (toolUseIDsWithoutResult.includes(toolUseId)) {
+                    log.debug(`Adding fake tool_result message for tool_use with ID: ${toolUseId}`);
+                    fixedConversation.push({
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'tool_result',
+                                tool_use_id: toolUseId,
+                                content: '[Tool use without result - most likely tool failed or response was too large to be sent to LLM]',
+                            },
+                        ],
+                    });
+                }
             }
         }
     }
-
-    return prunedConversation;
+    return fixedConversation;
 }

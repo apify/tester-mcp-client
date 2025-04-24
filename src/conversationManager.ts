@@ -164,7 +164,7 @@ export class ConversationManager {
      * @returns The number of tokens in the conversation.
      */
     private async countTokens(messages: MessageParam[]): Promise<number> {
-        if (this.conversation.length === 0) {
+        if (messages.length === 0) {
             return 0;
         }
         try {
@@ -192,11 +192,11 @@ export class ConversationManager {
 
         let currentTokens = await this.countTokens(this.conversation);
         if (currentTokens <= this.maxContextTokens) {
-            log.info(`[Context Truncation] Current token count (${currentTokens}) is within limit (${this.maxContextTokens}). No truncation needed.`);
+            log.info(`[Context truncation] Current token count (${currentTokens}) is within limit (${this.maxContextTokens}). No truncation needed.`);
             return;
         }
 
-        log.info(`[Context Truncation] Current token count (${currentTokens}) exceeds limit (${this.maxContextTokens}). Truncating conversation...`);
+        log.info(`[Context truncation] Current token count (${currentTokens}) exceeds limit (${this.maxContextTokens}). Truncating conversation...`);
         const initialMessagesCount = this.conversation.length;
 
         while (currentTokens > this.maxContextTokens && this.conversation.length > 1) {
@@ -220,7 +220,7 @@ export class ConversationManager {
                 break;
             }
         }
-        log.info(`[Context Truncation] Finished. Removed ${initialMessagesCount - this.conversation.length} messages. `
+        log.info(`[Context truncation] Finished. Removed ${initialMessagesCount - this.conversation.length} messages. `
                   + `Current token count: ${currentTokens}. Messages remaining: ${this.conversation.length}.`);
         // This is here mostly like a safety net, but it should not be needed
         this.conversation = pruneAndFixConversation(this.conversation);
