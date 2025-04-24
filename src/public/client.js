@@ -52,6 +52,8 @@ function handleSSEError(err) {
         eventSource.close();
         eventSource = null;
     }
+    reconnectMcpServerBtn.classList.remove('connected');
+    reconnectMcpServerBtn.classList.add('disconnected');
     // Only show the reconnection message if we haven't exceeded max attempts
     if (reconnectAttempts < maxReconnectAttempts) {
         reconnectAttempts++;
@@ -78,6 +80,8 @@ function createSSEConnection(isInitial = true, force = false) {
             eventSource.close();
             eventSource = null;
         }
+        reconnectMcpServerBtn.classList.remove('connected');
+        reconnectMcpServerBtn.classList.add('disconnected');
         return false;
     }
     // Reset reconnect attempts for initial connections
@@ -98,11 +102,15 @@ function createSSEConnection(isInitial = true, force = false) {
             console.log('SSE connection opened successfully');
             appendMessage('internal', 'Connected to MCP server!');
             reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+            reconnectMcpServerBtn.classList.remove('disconnected');
+            reconnectMcpServerBtn.classList.add('connected');
         };
         return true;
     } catch (err) {
         console.error('Error creating SSE connection:', err);
         appendMessage('internal', `Failed to establish connection: ${err.message}`);
+        reconnectMcpServerBtn.classList.remove('connected');
+        reconnectMcpServerBtn.classList.add('disconnected');
         return false;
     }
 }
