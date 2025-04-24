@@ -37,6 +37,7 @@ export class ConversationManager {
         maxNumberOfToolCallsPerQuery: number,
         toolCallTimeoutSec: number,
         tokenCharger: TokenCharger | null = null,
+        initialConversation: MessageParam[] = [],
     ) {
         this.systemPrompt = systemPrompt;
         this.modelName = modelName;
@@ -45,6 +46,7 @@ export class ConversationManager {
         this.toolCallTimeoutSec = toolCallTimeoutSec;
         this.tokenCharger = tokenCharger;
         this.anthropic = new Anthropic({ apiKey });
+        this.conversation = [...initialConversation];
     }
 
     resetConversation() {

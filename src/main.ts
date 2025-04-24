@@ -11,6 +11,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import type { MessageParam } from '@anthropic-ai/sdk/resources/index.js';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { Actor } from 'apify';
 import cors from 'cors';
@@ -125,6 +126,9 @@ const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
+const dataset = await Actor.openDataset<MessageParam>();
+const { items: initialConversation } = await dataset.getData({ clean: true });
+
 const conversationManager = new ConversationManager(
     input.systemPrompt,
     input.modelName,
@@ -133,6 +137,7 @@ const conversationManager = new ConversationManager(
     input.maxNumberOfToolCallsPerQuery,
     input.toolCallTimeoutSec,
     getChargeForTokens() ? new ActorTokenCharger() : null,
+    initialConversation,
 );
 
 // Only one browser client can be connected at a time
@@ -427,6 +432,5 @@ async function broadcastSSE(data: object) {
 app.listen(PORT, async () => {
     log.info(`Serving from ${path.join(publicPath, 'index.html')}`);
     const msg = `Navigate to ${publicUrl} to interact with the chat UI.`;
-    log.info(msg);
-    await Actor.pushData({ content: msg, role: publicUrl });
+    await Actor.setStatusMessage(msg);
 });
