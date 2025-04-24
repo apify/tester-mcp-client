@@ -19,7 +19,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 
 import { createClient } from './clientFactory.js';
-import { BASIC_INFORMATION, Event } from './const.js';
+import { BASIC_INFORMATION, CONVERSATION_STATE_RECORD_NAME, Event } from './const.js';
 import { ConversationManager } from './conversationManager.js';
 import { processInput, getChargeForTokens } from './input.js';
 import { log } from './logger.js';
@@ -126,8 +126,7 @@ const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
-const dataset = await Actor.openDataset<MessageParam>();
-const { items: initialConversation } = await dataset.getData({ clean: true });
+const persistedConversation = (await Actor.getValue<MessageParam[]>(CONVERSATION_STATE_RECORD_NAME)) ?? [];
 
 const conversationManager = new ConversationManager(
     input.systemPrompt,
@@ -137,8 +136,13 @@ const conversationManager = new ConversationManager(
     input.maxNumberOfToolCallsPerQuery,
     input.toolCallTimeoutSec,
     getChargeForTokens() ? new ActorTokenCharger() : null,
-    initialConversation,
+    persistedConversation,
 );
+
+Actor.on('persistState', async () => {
+    log.debug(`Persisting conversation.`);
+    await Actor.setValue(CONVERSATION_STATE_RECORD_NAME, conversationManager.getConversation());
+});
 
 // Only one browser client can be connected at a time
 type BrowserSSEClient = { id: number; res: express.Response };
