@@ -12,7 +12,7 @@ import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
 import type { Tool, TokenCharger } from './types.js';
-import { pruneConversation } from './utils.js';
+import { pruneAndFixConversation } from './utils.js';
 
 if (typeof globalThis.EventSource === 'undefined') {
     globalThis.EventSource = EventSource as unknown as typeof globalThis.EventSource;
@@ -99,7 +99,7 @@ export class ConversationManager {
                     // TODO if we are not careful with slice, we can remove message and get this error
                     // 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.0: unexpected tool_use_id found in tool_result
                     // messages: messages.slice(-MAX_HISTORY_CONVERSATIONS),
-                    messages: pruneConversation(messages),
+                    messages: pruneAndFixConversation(messages),
                     system: this.systemPrompt,
                     tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
                 });
