@@ -20,8 +20,8 @@ if (typeof globalThis.EventSource === 'undefined') {
 
 // Define a default, can be overridden in constructor
 const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
-// Define a safety margin (e.g., 10%) to avoid edge cases
-const CONTEXT_TOKEN_SAFETY_MARGIN = 0.9;
+// Define a safety margin to avoid edge cases
+const CONTEXT_TOKEN_SAFETY_MARGIN = 0.99;
 
 export class ConversationManager {
     private conversation: MessageParam[] = [];
