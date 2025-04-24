@@ -157,6 +157,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             conversation.forEach(({ role, content }) => {
                 appendMessage(role, content);
             });
+            scrollToBottom();
         }
     } catch (err) {
         console.warn('Could not load prior conversation:', err);
