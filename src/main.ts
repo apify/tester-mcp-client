@@ -415,6 +415,10 @@ app.post('/settings/reset', async (_req, res) => {
     }
 });
 
+app.get('/conversation', (_req, res) => {
+    res.json(conversationManager.getConversation());
+});
+
 app.get('*', (_req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
