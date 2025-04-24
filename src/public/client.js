@@ -158,8 +158,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 appendMessage(role, content);
             });
         }
-    } catch (e) {
-        console.warn('Could not load prior conversation:', e);
+    } catch (err) {
+        console.warn('Could not load prior conversation:', err);
     }
 
     setupModals();
