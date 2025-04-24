@@ -137,20 +137,14 @@ const conversationManager = new ConversationManager(
 
 // Only one browser client can be connected at a time
 type BrowserSSEClient = { id: number; res: express.Response };
-let browserClient: BrowserSSEClient | null = null;
+let browserClients: BrowserSSEClient[] = [];
+let nextClientId = 1;
 
 // Create a single instance of your MCP client (client is connected to the MCP-server)
 let client: Client | null = null;
 
 // 5) SSE endpoint for the client.js (browser)
 app.get('/sse', async (req, res) => {
-    // Disconnect any existing client
-    if (browserClient) {
-        const message = 'Only one browser client can be connected at a time. Disconnected. '
-            + 'This typically happens when you reload the page or have multiple tabs open.';
-        log.warning(message);
-        browserClient.res.end();
-    }
     // Required headers for SSE
     res.set({
         'Content-Type': 'text/event-stream',
@@ -160,24 +154,26 @@ app.get('/sse', async (req, res) => {
     });
     res.flushHeaders();
 
+    const clientId = nextClientId++;
     const keepAliveInterval = setInterval(() => {
         res.write(':\n\n'); // Send a comment as a keepalive
     }, 5000); // Send keepalive every 5 seconds
 
-    browserClient = { id: 1, res };
-    log.debug('Browser client connected');
-    // If client closes connection, clear interval
+    browserClients.push({ id: clientId, res });
+    log.debug(`Browser client ${clientId} connected`);
+
+    // If a client closes connection, clear an interval and remove from an array
     req.on('close', () => {
-        log.debug('Browser client disconnected');
+        log.debug(`Browser client ${clientId} disconnected`);
         clearInterval(keepAliveInterval);
-        browserClient = null;
+        browserClients = browserClients.filter((browserClient) => browserClient.id !== clientId);
     });
 
     // Handle client timeout
     req.on('timeout', () => {
-        log.debug('Browser client timeout');
+        log.debug(`Browser client ${clientId} timeout`);
         clearInterval(keepAliveInterval);
-        browserClient = null;
+        browserClients = browserClients.filter((browserClient) => browserClient.id !== clientId);
         res.end();
     });
 });
@@ -298,6 +294,7 @@ app.get('/check-actor-timeout', (_req, res) => {
  * POST /conversation/reset to reset the conversation
  */
 app.post('/conversation/reset', (_req, res) => {
+    log.debug('Resetting conversation');
     conversationManager.resetConversation();
     res.json({ ok: true });
 });
@@ -361,8 +358,9 @@ app.post('/settings', async (req, res) => {
                 }
                 client = null;
             }
-            // Next API request will create a new client with updated settings
+            // The next API request will create a new client with updated settings
         }
+        log.info(`Settings updated: ${JSON.stringify(runtimeSettings)}`);
         res.json({ success: true });
     } catch (error) {
         log.error('Error updating settings:', { error: (error instanceof Error) ? error.message : String(error) });
@@ -392,7 +390,7 @@ app.post('/settings/reset', async (_req, res) => {
             toolCallTimeoutSec: runtimeSettings.toolCallTimeoutSec,
         });
 
-        // Close existing client to force recreation with default settings
+        // Close the existing client to force recreation with default settings
         if (client) {
             try {
                 await client.close();
@@ -419,8 +417,11 @@ async function broadcastSSE(data: object) {
     log.debug('Push data into Apify dataset');
     await Actor.pushData(data);
 
-    log.debug('Broadcasting message to client');
-    if (browserClient) browserClient.res.write(`data: ${JSON.stringify(data)}\n\n`);
+    log.debug(`Broadcasting message to ${browserClients.length} clients`);
+    const message = `data: ${JSON.stringify(data)}\n\n`;
+    browserClients.forEach((browserClient) => {
+        browserClient.res.write(message);
+    });
 }
 
 app.listen(PORT, async () => {
