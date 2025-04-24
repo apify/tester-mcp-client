@@ -477,32 +477,8 @@ body {
     background: var(--border-color);
 }
 
-.typing-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.5rem;
-}
-
-.typing-dot {
-    width: 8px;
-    height: 8px;
-    background: var(--text-secondary);
-    border-radius: 50%;
-    animation: typingAnimation 1.4s infinite ease-in-out;
-}
-
-.typing-dot:nth-child(2) {
-    animation-delay: 0.2s;
-}
-
-.typing-dot:nth-child(3) {
-    animation-delay: 0.4s;
-}
-
-@keyframes typingAnimation {
-    0%, 60%, 100% { transform: translateY(0); }
-    30% { transform: translateY(-4px); }
+.send-btn i {
+    font-size: 1.2rem;
 }
 
 @keyframes fadeIn {
@@ -802,12 +778,16 @@ textarea.form-control {
     border-radius: var(--radius-md);
     display: flex;
     align-items: center;
-    transition: all 0.2s ease;
     border: 1px solid var(--border-color);
-    cursor: pointer;
 }
 
-#quickStartModal .modal-body ul li:hover {
+/* Make only the first list (example questions) clickable */
+#quickStartModal .modal-body h4:first-of-type + ul li {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#quickStartModal .modal-body h4:first-of-type + ul li:hover {
     background: #f8f9ff;
     border-color: var(--primary-color);
     transform: translateY(-2px);

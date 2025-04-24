@@ -44,8 +44,7 @@ function handleSSEMessage(event) {
     // Handle finished flag
     if (data.finished) {
         isProcessingMessage = false;
-        sendBtn.disabled = false;
-        sendBtn.style.cursor = 'pointer';
+        sendBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
         queryInput.focus();
         if (data.error) {
             appendMessage('internal', `Error: ${data.content}`);
@@ -500,38 +499,20 @@ async function sendQuery(query) {
     if (isProcessingMessage) return;
     // Set processing state
     isProcessingMessage = true;
-    sendBtn.disabled = true;
-    sendBtn.style.cursor = 'not-allowed';
+    // Show spinner in send button but keep it enabled
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     // First append the user message
     appendMessage('user', query);
-
-    // Create and show typing indicator
-    const loadingRow = document.createElement('div');
-    loadingRow.className = 'message-row';
-    loadingRow.innerHTML = `
-        <div class="bubble assistant loading">
-            <div class="typing-indicator">
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-                <div class="typing-dot"></div>
-            </div>
-        </div>
-    `;
-
-    chatLog.appendChild(loadingRow);
-    scrollToBottom();
 
     // Safety timeout to re-enable the button if we don't get a response
     const safetyTimeout = setTimeout(() => {
         if (isProcessingMessage) {
             console.warn('Safety timeout reached - re-enabling send button');
             isProcessingMessage = false;
-            sendBtn.disabled = false;
-            sendBtn.style.cursor = 'pointer';
+            sendBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
             queryInput.focus();
-            appendMessage('internal', 'Request timed out. You can try sending your message again.');
         }
-    }, 30000); // 30 seconds timeout
+    }, 60_000); // 60 seconds timeout
 
     try {
         const resp = await fetch('/message', {
@@ -541,15 +522,13 @@ async function sendQuery(query) {
         });
         const data = await resp.json();
         if (data.error) {
+            console.log('Server error:', data.error);
             appendMessage('internal', `Server error: ${data.error}`);
         }
     } catch (err) {
-        appendMessage('internal', `Network error. Try to reconnect or reload page: ${err.message}`);
+        console.log('Network error:', err);
+        appendMessage('internal', 'Network error. Try to reconnect or reload page');
     } finally {
-        // Remove loading indicator
-        if (loadingRow.parentNode === chatLog) {
-            loadingRow.remove();
-        }
         // Clear the safety timeout
         clearTimeout(safetyTimeout);
     }
@@ -746,8 +725,8 @@ function setupModals() {
     const settingsBtn = document.getElementById('settingsBtn');
     const toolsBtn = document.getElementById('toolsBtn');
 
-    // Set up example question clicks
-    const exampleQuestions = document.querySelectorAll('#quickStartModal .modal-body ul li');
+    // Set up example question clicks - only for the first list
+    const exampleQuestions = document.querySelectorAll('#quickStartModal .modal-body h4:first-of-type + ul li');
     exampleQuestions.forEach((question) => {
         question.addEventListener('click', () => {
             const text = question.textContent.trim();
