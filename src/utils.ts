@@ -98,9 +98,9 @@ export function pruneAndFixConversation(conversation: MessageParam[]): MessagePa
                             type: 'tool_result',
                             tool_use_id: block.id,
                             content: '[Tool use without result - reason unknown]',
-                        }
-                    ]
-                })
+                        },
+                    ],
+                });
             }
         }
     }
