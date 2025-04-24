@@ -12,7 +12,7 @@ import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
 import type { Tool, TokenCharger } from './types.js';
-import { pruneAndFixConversation } from './utils.js';
+import { fixConversation } from './utils.js';
 
 if (typeof globalThis.EventSource === 'undefined') {
     globalThis.EventSource = EventSource as unknown as typeof globalThis.EventSource;
@@ -99,7 +99,7 @@ export class ConversationManager {
                     // TODO if we are not careful with slice, we can remove message and get this error
                     // 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.0: unexpected tool_use_id found in tool_result
                     // messages: messages.slice(-MAX_HISTORY_CONVERSATIONS),
-                    messages: pruneAndFixConversation(messages),
+                    messages: fixConversation(messages),
                     system: this.systemPrompt,
                     tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
                 });
@@ -127,23 +127,6 @@ export class ConversationManager {
                                 ? `Rate limit exceeded after ${maxRetries} attempts. Please try again in a few minutes or consider switching to a different model`
                                 : 'Server is currently experiencing high load. Please try again in a few moments or consider switching to a different model.';
                             throw new Error(errorMsg);
-                        }
-                    }
-                    // Handle tool_use without tool_result blocks error
-                    if (error.message.includes('tool_use') && error.message.includes('without tool_result blocks')) {
-                        log.debug('Found tool_use without corresponding tool_result blocks, removing problematic message and retrying...');
-                        // Find the message with the specific tool_use ID
-                        const toolUseId = error.message.match(/toolu_[A-Za-z0-9]+/)?.[0];
-                        if (toolUseId) {
-                            const problematicIndex = messages.findIndex((msg) => {
-                                if (typeof msg.content === 'string') return false;
-                                return msg.content.some((block) => block.type === 'tool_use' && block.id === toolUseId);
-                            });
-
-                            if (problematicIndex !== -1) {
-                                messages.splice(problematicIndex, 1);
-                                continue;
-                            }
                         }
                     }
                 }
