@@ -139,8 +139,9 @@ const conversationManager = new ConversationManager(
     persistedConversation,
 );
 
-Actor.on('persistState', async () => {
-    log.debug(`Persisting conversation.`);
+// This should not be needed, but just in case
+Actor.on('migrating', async () => {
+    log.debug(`Migrating ... persisting conversation.`);
     await Actor.setValue(CONVERSATION_RECORD_NAME, conversationManager.getConversation());
 });
 
@@ -302,9 +303,10 @@ app.get('/check-actor-timeout', (_req, res) => {
 /**
  * POST /conversation/reset to reset the conversation
  */
-app.post('/conversation/reset', (_req, res) => {
+app.post('/conversation/reset', async (_req, res) => {
     log.debug('Resetting conversation');
     conversationManager.resetConversation();
+    await Actor.setValue(CONVERSATION_RECORD_NAME, conversationManager.getConversation());
     res.json({ ok: true });
 });
 
@@ -427,8 +429,9 @@ app.get('*', (_req, res) => {
  * Broadcasts an event to all connected SSE clients
  */
 async function broadcastSSE(data: object) {
-    log.debug('Push data into Apify dataset');
+    log.debug('Push data into Apify dataset and persist conversation');
     await Actor.pushData(data);
+    await Actor.setValue(CONVERSATION_RECORD_NAME, conversationManager.getConversation());
 
     log.debug(`Broadcasting message to ${browserClients.length} clients`);
     const message = `data: ${JSON.stringify(data)}\n\n`;
