@@ -280,7 +280,7 @@ export class ConversationManager {
     }
 
     async handleLLMResponse(client: Client, response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCount = 0) {
-        console.log(`[internal] handleLLMResponse: ${JSON.stringify(response)}`);
+        log.debug(`[internal] handleLLMResponse: ${JSON.stringify(response)}`);
         for (const block of response.content) {
             if (block.type === 'text') {
                 this.conversation.push({ role: 'assistant', content: block.text || '' });
