@@ -422,7 +422,7 @@ function isBase64(str) {
 function appendToolBlock(item, key) {
     const row = document.createElement('div');
     row.className = 'message-row tool-row';
-    if (key) row.setAttribute('data-key', key);
+    if (key !== undefined) row.setAttribute('data-key', key);
 
     const container = document.createElement('div');
     container.className = 'tool-block';
