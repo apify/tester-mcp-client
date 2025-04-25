@@ -41,6 +41,7 @@ function handleSSEMessage(event) {
         console.warn('Could not parse SSE event as JSON:', event.data);
         return;
     }
+    console.log('Received SSE message:', data);
     // Handle finished flag
     if (data.finished) {
         isProcessingMessage = false;
