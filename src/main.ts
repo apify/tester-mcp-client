@@ -21,6 +21,7 @@ import express from 'express';
 import { createClient } from './clientFactory.js';
 import { BASIC_INFORMATION, CONVERSATION_RECORD_NAME, Event } from './const.js';
 import { ConversationManager } from './conversationManager.js';
+import { Counter } from './counter.js';
 import { processInput, getChargeForTokens } from './input.js';
 import { log } from './logger.js';
 import type { TokenCharger, Input } from './types.js';
@@ -127,6 +128,7 @@ const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
 const persistedConversation = (await Actor.getValue<MessageParam[]>(CONVERSATION_RECORD_NAME)) ?? [];
+const conversationCounter = new Counter(persistedConversation.length);
 
 const conversationManager = new ConversationManager(
     input.systemPrompt,
@@ -236,7 +238,13 @@ app.post('/message', async (req, res) => {
         await Actor.pushData({ role: 'user', content: query });
         const mcpClient = await getOrCreateClient();
         await conversationManager.processUserQuery(mcpClient, query, async (role, content) => {
-            await broadcastSSE({ role, content });
+            // Key used for sorting messages in the client UI
+            const key = conversationCounter.increment();
+            await broadcastSSE({
+                role,
+                content,
+                key,
+            });
         });
         // Charge for task completion
         await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
