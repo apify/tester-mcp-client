@@ -16,10 +16,22 @@ const toolsLoading = document.getElementById('toolsLoading');
 // State for tracking message processing
 let isProcessingMessage = false;
 
+/**
+ * Checks if the user is scrolling.
+ * Determines if the user is not at the bottom of the chat log.
+ @param {number} tolerance - The tolerance in pixels to consider the user as scrolling (default is 50).
+ @returns {boolean} - True if the user is scrolling, false otherwise.
+ */
+function isUserScrolling(tolerance = 50) {
+    // Check if the user is not at the bottom of the page
+    return window.scrollY + window.innerHeight < document.body.scrollHeight - tolerance;
+}
+
 // Simple scroll to bottom function
 function scrollToBottom() {
     // Scroll the chat log
-    chatLog.scrollTop = chatLog.scrollHeight;
+    // Scroll to bottom of the page
+    window.scrollTo(0, document.body.scrollHeight);
 }
 
 const messages = []; // Local message array for display only
@@ -302,6 +314,9 @@ function showNotification(message, type = 'info') {
  *   handle each item separately; otherwise just show a normal bubble.
  */
 function appendMessage(role, content) {
+    // Always scroll to bottom when user sends the message
+    // otherwise only when user is not scrolling chat history
+    const shouldScrollToBottom = role === 'user' ? true : !isUserScrolling();
     messages.push({ role, content });
 
     if (Array.isArray(content)) {
@@ -316,6 +331,8 @@ function appendMessage(role, content) {
         // normal single content
         appendSingleBubble(role, content);
     }
+
+    if (shouldScrollToBottom) scrollToBottom();
 }
 
 /**
@@ -339,7 +356,6 @@ function appendSingleBubble(role, content) {
 
     row.appendChild(bubble);
     chatLog.appendChild(row);
-    scrollToBottom();
 }
 
 /**
@@ -436,7 +452,6 @@ function appendToolBlock(item) {
 
     row.appendChild(container);
     chatLog.appendChild(row);
-    scrollToBottom();
 
     // Add click handler for the chevron icon
     const chevron = container.querySelector('.fa-chevron-down');
