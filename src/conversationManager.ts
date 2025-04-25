@@ -280,6 +280,17 @@ export class ConversationManager {
     }
 
     async handleLLMResponse(client: Client, response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCount = 0) {
+        // Sort the response content to ensure text comes before tool_use
+        response.content.sort((a, b) => {
+            if (a.type === 'text' && b.type === 'tool_use') {
+                return -1; // text should come before tool_use
+            }
+            if (a.type === 'tool_use' && b.type === 'text') {
+                return 1; // tool_use should come after text
+            }
+            return 0; // keep the original order for other types
+        });
+
         for (const block of response.content) {
             if (block.type === 'text') {
                 this.conversation.push({ role: 'assistant', content: block.text || '' });
