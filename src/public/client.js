@@ -309,7 +309,7 @@ function showNotification(message, type = 'info') {
 // ================== MAIN CHAT LOGIC: APPEND MESSAGES & TOOL BLOCKS ==================
 
 /**
-* Fix message order by timestamp
+* Fix message order by key
 @returns {void}
 */
 function fixMessageOrder() {
