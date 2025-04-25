@@ -384,7 +384,7 @@ function appendMessage(role, content, key = undefined) {
 function appendSingleBubble(role, content, key) {
     const row = document.createElement('div');
     row.className = 'message-row';
-    if (key) row.setAttribute('data-key', key);
+    if (key !== undefined) row.setAttribute('data-key', key);
 
     if (role === 'user') {
         row.classList.add('user-message');
