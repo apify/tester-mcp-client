@@ -283,6 +283,7 @@ export class ConversationManager {
         for (const block of response.content) {
             if (block.type === 'text') {
                 this.conversation.push({ role: 'assistant', content: block.text || '' });
+                log.debug(`[internal] emitting SSE text message: ${block.text}`);
                 sseEmit('assistant', block.text || '');
             } else if (block.type === 'tool_use') {
                 if (toolCallCount >= this.maxNumberOfToolCallsPerQuery) {
@@ -290,9 +291,11 @@ export class ConversationManager {
                         Limit is ${this.maxNumberOfToolCallsPerQuery}.
                         You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
                     this.conversation.push({ role: 'assistant', content: msg });
+                    log.debug(`[internal] emitting SSE tool limit message: ${msg}`);
                     sseEmit('assistant', msg);
                     const finalResponse = await this.createMessageWithRetry();
                     this.conversation.push({ role: 'assistant', content: finalResponse.content || '' });
+                    log.debug(`[internal] emitting SSE tool limit final message: ${finalResponse.content}`);
                     sseEmit('assistant', finalResponse.content || '');
                     return;
                 }
@@ -301,6 +304,7 @@ export class ConversationManager {
                     content: [{ id: block.id, input: block.input, name: block.name, type: 'tool_use' as const }],
                 };
                 this.conversation.push(msgAssistant);
+                log.debug(`[internal] emitting SSE tool_use message: ${JSON.stringify(msgAssistant)}`);
                 sseEmit(msgAssistant.role, msgAssistant.content);
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const params = { name: block.name, arguments: block.input as any };
@@ -331,6 +335,7 @@ export class ConversationManager {
                 }
                 // Always add the tool result to the conversation and emit it
                 this.conversation.push(msgUser);
+                log.debug(`[internal] emitting SSE tool_result message: ${JSON.stringify(msgUser)}`);
                 sseEmit(msgUser.role, msgUser.content);
                 // Get next response from Claude
                 log.debug('[internal] Get model response from tool result');
