@@ -457,3 +457,10 @@ app.listen(PORT, async () => {
     const msg = `Navigate to ${publicUrl} to interact with the chat UI.`;
     await Actor.setStatusMessage(msg);
 });
+
+// Fix Ctrl+C for npm run start
+process.on('SIGINT', async () => {
+    log.info('Received SIGINT. Cleaning up and exiting...');
+    await cleanupClient();
+    await Actor.exit('SIGINT received');
+});
