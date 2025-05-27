@@ -1,6 +1,8 @@
 import type { ContentBlockParam, MessageParam } from '@anthropic-ai/sdk/resources';
 import { log } from 'apify';
 
+import { IMAGE_BASE64_PLACEHOLDER } from './const.js';
+
 export function isBase64(str: string): boolean {
     if (!str) {
         return false;
@@ -37,7 +39,7 @@ export function pruneAndFixConversation(conversation: MessageParam[]): MessagePa
         if (typeof message.content === 'string') {
             prunedAndFixedConversation.push({
                 ...message,
-                content: isBase64(message.content) ? '[Base64 encoded content]' : message.content,
+                content: isBase64(message.content) ? IMAGE_BASE64_PLACEHOLDER : message.content,
             });
             continue;
         }
@@ -49,7 +51,7 @@ export function pruneAndFixConversation(conversation: MessageParam[]): MessagePa
             if (block.type === 'text' && isBase64(block.text)) {
                 return {
                     type: 'text',
-                    text: '[Base64 encoded content]',
+                    text: IMAGE_BASE64_PLACEHOLDER,
                     cache_control: block.cache_control,
                     citations: block.citations,
                 };
@@ -67,30 +69,7 @@ export function pruneAndFixConversation(conversation: MessageParam[]): MessagePa
                 if (typeof block.content === 'string' && isBase64(block.content)) {
                     return {
                         type: 'tool_result',
-                        content: '[Base64 encoded content]',
-                        tool_use_id: block.tool_use_id,
-                        is_error: block.is_error,
-                        cache_control: block.cache_control,
-                    };
-                }
-
-                // Handle base64 encoded tool_result content (array)
-                if (Array.isArray(block.content)) {
-                    const processedContent = block.content.map((contentBlock) => {
-                        if (contentBlock.type === 'text' && isBase64(contentBlock.text)) {
-                            return {
-                                type: 'text',
-                                text: '[Base64 encoded content]',
-                                cache_control: contentBlock.cache_control,
-                                citations: contentBlock.citations,
-                            };
-                        }
-                        return contentBlock;
-                    });
-
-                    return {
-                        type: 'tool_result',
-                        content: processedContent,
+                        content: IMAGE_BASE64_PLACEHOLDER,
                         tool_use_id: block.tool_use_id,
                         is_error: block.is_error,
                         cache_control: block.cache_control,

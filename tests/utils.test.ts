@@ -1,6 +1,7 @@
 import type { MessageParam } from '@anthropic-ai/sdk/resources/index.js';
 import { describe, it, expect } from 'vitest';
 
+import { IMAGE_BASE64_PLACEHOLDER } from '../src/const.js';
 import { pruneAndFixConversation } from '../src/utils.js';
 
 describe('pruneAndFixConversation', () => {
@@ -224,117 +225,143 @@ describe('pruneAndFixConversation', () => {
         // Check that the dummy tool_use is IMMEDIATELY before the tool_result (they are chained)
         expect(toolResultIndex).toBe(dummyToolUseIndex + 1);
     });
-});
 
-it('should NOT add dummy tool_result for tool_use in the last message', () => {
-    const conversation = [
-        { role: 'user', content: 'scrape example com' },
-        { role: 'assistant', content: "I'll help you scrape example.com." },
-        // This is the last message with a tool_use, so it should NOT get a dummy tool_result
-        { role: 'assistant', content: [{ id: 'last_tool', type: 'tool_use', name: 'scraper', input: { url: 'example.com' } }] },
-    ];
+    it('should NOT add dummy tool_result for tool_use in the last message', () => {
+        const conversation = [
+            { role: 'user', content: 'scrape example com' },
+            { role: 'assistant', content: "I'll help you scrape example.com." },
+            // This is the last message with a tool_use, so it should NOT get a dummy tool_result
+            { role: 'assistant', content: [{ id: 'last_tool', type: 'tool_use', name: 'scraper', input: { url: 'example.com' } }] },
+        ];
 
-    const result = pruneAndFixConversation(conversation as MessageParam[]);
+        const result = pruneAndFixConversation(conversation as MessageParam[]);
 
-    // Check that no dummy tool_result was added
-    const dummyToolResult = result.find(
-        (msg) => Array.isArray(msg.content)
+        // Check that no dummy tool_result was added
+        const dummyToolResult = result.find(
+            (msg) => Array.isArray(msg.content)
             && msg.content.some(
                 (block) => block.type === 'tool_result' && block.tool_use_id === 'last_tool',
             ),
-    );
+        );
 
-    expect(dummyToolResult).toBeUndefined();
+        expect(dummyToolResult).toBeUndefined();
 
-    // Check that the result length is the same as the original conversation
-    expect(result.length).toBe(conversation.length);
-});
+        // Check that the result length is the same as the original conversation
+        expect(result.length).toBe(conversation.length);
+    });
 
-it('should handle orphaned tool_result before orphaned tool_use', () => {
+    it('should handle orphaned tool_result before orphaned tool_use', () => {
     // Create random IDs for the test
-    const orphanedToolResultId = 'orphaned_tool_result_id';
-    const orphanedToolUseId = 'orphaned_tool_use_id';
+        const orphanedToolResultId = 'orphaned_tool_result_id';
+        const orphanedToolUseId = 'orphaned_tool_use_id';
 
-    const conversation = [
-        { role: 'user', content: 'run some tools' },
-        { role: 'assistant', content: "I'll run those tools for you." },
-        // Orphaned tool_result appears first
-        {
-            role: 'user',
-            content: [
-                {
-                    type: 'tool_result',
-                    tool_use_id: orphanedToolResultId,
-                    content: 'Result from orphaned tool',
-                },
-            ],
-        },
-        // Some conversation in between
-        { role: 'assistant', content: 'Let me run another tool for you.' },
-        // Orphaned tool_use appears later
-        {
-            role: 'assistant',
-            content: [
-                {
-                    type: 'tool_use',
-                    id: orphanedToolUseId,
-                    name: 'unknown_tool',
-                    input: {},
-                },
-            ],
-        },
-        { role: 'user', content: 'Thanks for the results' },
-    ];
+        const conversation = [
+            { role: 'user', content: 'run some tools' },
+            { role: 'assistant', content: "I'll run those tools for you." },
+            // Orphaned tool_result appears first
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'tool_result',
+                        tool_use_id: orphanedToolResultId,
+                        content: 'Result from orphaned tool',
+                    },
+                ],
+            },
+            // Some conversation in between
+            { role: 'assistant', content: 'Let me run another tool for you.' },
+            // Orphaned tool_use appears later
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool_use',
+                        id: orphanedToolUseId,
+                        name: 'unknown_tool',
+                        input: {},
+                    },
+                ],
+            },
+            { role: 'user', content: 'Thanks for the results' },
+        ];
 
-    const result = pruneAndFixConversation(conversation as MessageParam[]);
+        const result = pruneAndFixConversation(conversation as MessageParam[]);
 
-    // Check that a dummy tool_use was added for the orphaned tool_result
-    const dummyToolUseMessage = result.find(
-        (msg) => msg.role === 'assistant'
+        // Check that a dummy tool_use was added for the orphaned tool_result
+        const dummyToolUseMessage = result.find(
+            (msg) => msg.role === 'assistant'
             && Array.isArray(msg.content)
             && msg.content.some(
                 (block) => block.type === 'tool_use' && block.id === orphanedToolResultId,
             ),
-    );
-    expect(dummyToolUseMessage).toBeDefined();
+        );
+        expect(dummyToolUseMessage).toBeDefined();
 
-    // Check that a dummy tool_result was added for the orphaned tool_use
-    const dummyToolResultMessage = result.find(
-        (msg) => msg.role === 'user'
+        // Check that a dummy tool_result was added for the orphaned tool_use
+        const dummyToolResultMessage = result.find(
+            (msg) => msg.role === 'user'
             && Array.isArray(msg.content)
             && msg.content.some(
                 (block) => block.type === 'tool_result' && block.tool_use_id === orphanedToolUseId,
             ),
-    );
-    expect(dummyToolResultMessage).toBeDefined();
+        );
+        expect(dummyToolResultMessage).toBeDefined();
 
-    // Verify the order of messages for the orphaned tool_result
-    const orphanedToolResultIndex = result.findIndex(
-        (msg) => Array.isArray(msg.content)
+        // Verify the order of messages for the orphaned tool_result
+        const orphanedToolResultIndex = result.findIndex(
+            (msg) => Array.isArray(msg.content)
             && msg.content.some(
                 (block) => block.type === 'tool_result' && block.tool_use_id === orphanedToolResultId,
             ),
-    );
-    const dummyToolUseIndex = result.findIndex(
-        (msg) => Array.isArray(msg.content)
+        );
+        const dummyToolUseIndex = result.findIndex(
+            (msg) => Array.isArray(msg.content)
             && msg.content.some(
                 (block) => block.type === 'tool_use' && block.id === orphanedToolResultId,
             ),
-    );
-    expect(dummyToolUseIndex).toBe(orphanedToolResultIndex - 1);
+        );
+        expect(dummyToolUseIndex).toBe(orphanedToolResultIndex - 1);
 
-    // Verify the order of messages for the orphaned tool_use
-    const orphanedToolUseIndex = result.findIndex(
-        (msg) => Array.isArray(msg.content)
+        // Verify the order of messages for the orphaned tool_use
+        const orphanedToolUseIndex = result.findIndex(
+            (msg) => Array.isArray(msg.content)
             && msg.content.some(
                 (block) => block.type === 'tool_use' && block.id === orphanedToolUseId,
             ),
-    );
-    const dummyToolResultIndex = result.findIndex(
-        (msg) => Array.isArray(msg.content)
+        );
+        const dummyToolResultIndex = result.findIndex(
+            (msg) => Array.isArray(msg.content)
             && msg.content.some(
                 (block) => block.type === 'tool_result' && block.tool_use_id === orphanedToolUseId,
             ),
-    );
-    expect(dummyToolResultIndex).toBe(orphanedToolUseIndex + 1);
+        );
+        expect(dummyToolResultIndex).toBe(orphanedToolUseIndex + 1);
+    });
+
+    it('should prune base64 encoded image content and replace with placeholder', () => {
+    // A simple base64 string (not a real image, but enough for test)
+        const base64String = 'aGVsbG8gd29ybGQ='; // "hello world" in base64
+        const conversation = [
+            { role: 'user', content: base64String },
+            {
+                role: 'assistant',
+                content: [
+                    { type: 'text', text: base64String },
+                    { type: 'tool_use', id: 'tool_img', name: 'img_tool', input: {} },
+                ],
+            },
+            {
+                role: 'user',
+                content: [
+                    { type: 'tool_result', tool_use_id: 'tool_img', content: base64String },
+                ],
+            },
+        ];
+
+        const result = pruneAndFixConversation(conversation as MessageParam[]);
+
+        // Check string message is replaced
+        expect(result[2].content[0].content).toBe(IMAGE_BASE64_PLACEHOLDER);
+    });
 });
