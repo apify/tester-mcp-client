@@ -343,11 +343,11 @@ describe('pruneAndFixConversation', () => {
     // A simple base64 string (not a real image, but enough for test)
         const base64String = 'aGVsbG8gd29ybGQ='; // "hello world" in base64
         const conversation = [
-            { role: 'user', content: base64String },
+            { role: 'user', content: 'Show me an image' },
             {
                 role: 'assistant',
                 content: [
-                    { type: 'text', text: base64String },
+                    { type: 'text', text: 'I will use image tool' },
                     { type: 'tool_use', id: 'tool_img', name: 'img_tool', input: {} },
                 ],
             },
@@ -360,6 +360,17 @@ describe('pruneAndFixConversation', () => {
         ];
 
         const result = pruneAndFixConversation(conversation as MessageParam[]);
+
+        // Check that conversation is preserved
+        expect(result.length).toBe(conversation.length);
+        expect(result[0].role).toBe('user');
+        expect(result[0].content).toBe('Show me an image');
+        expect(result[1].role).toBe('assistant');
+        expect(result[1].content[0].type).toBe('text');
+        expect(result[1].content[0].text).toBe('I will use image tool');
+        expect(result[1].content[1].type).toBe('tool_use');
+        expect(result[1].content[1].id).toBe('tool_img');
+        expect(result[1].content[1].name).toBe('img_tool');
 
         // Check string message is replaced
         expect(result[2].content[0].content).toBe(IMAGE_BASE64_PLACEHOLDER);
