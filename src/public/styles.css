@@ -402,6 +402,34 @@ body {
     background: transparent;
 }
 
+.tool-result-content .image-result {
+    margin: 10px 0;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: #f9f9f9;
+}
+
+.tool-result-content .text-result {
+    margin: 5px 0;
+}
+
+.tool-icon.success {
+    color: #28a745;
+}
+
+.tool-icon.error {
+    color: #dc3545;
+}
+
+.tool-result-content img {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.tool-result-content img:hover {
+    cursor: pointer;
+}
+
 #inputRow {
     position: fixed;
     bottom: 0;

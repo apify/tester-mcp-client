@@ -452,36 +452,49 @@ function appendToolBlock(item, key) {
     </div>
 </details>`;
     } else if (item.type === 'tool_result') {
-        let resultHtml;
-        if (typeof item.content === 'string' && isBase64(item.content)) {
-            resultHtml = `
-            <div class="tool-image">
-                <img
-                    src="data:image/png;base64,${item.content}"
-                    style="max-width:100%; height:auto;"
-                    alt="Tool result image"
-                />
-            </div>`;
-        } else {
-            resultHtml = item.content
-                ? formatAnyContent(item.content)
-                : '<em>No result available</em>';
+        let resultContent = '<em>No content</em>';
+        let statusClass = 'success';
+        let statusIcon = 'fa-check-circle';
+        let statusText = 'Success';
+        
+        if (item.is_error) {
+            statusClass = 'error';
+            statusIcon = 'fa-exclamation-circle';
+            statusText = 'Error';
         }
-
-        const contentLength = typeof item.content === 'string'
-            ? item.content.length
-            : JSON.stringify(item.content || '').length;
-
+        
+        if (Array.isArray(item.content)) {
+            resultContent = item.content.map(contentItem => {
+                if (typeof contentItem === 'object' && contentItem.type === 'image') {
+                    // Handle both formats: direct data and Anthropic source format
+                    let imageData = contentItem.data;
+                    if (!imageData && contentItem.source && contentItem.source.data) {
+                        imageData = contentItem.source.data;
+                    }
+                    if (imageData) {
+                        return `<div class="image-result">
+                            ${contentItem.text ? `<p>${contentItem.text}</p>` : ''}
+                            <img src="data:image/png;base64,${imageData}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Tool result image" />
+                        </div>`;
+                    }
+                } else if (typeof contentItem === 'object' && contentItem.type === 'text') {
+                    return `<div class="text-result">${formatMarkdown(contentItem.text || '')}</div>`;
+                } else {
+                    return formatAnyContent(contentItem);
+                }
+            }).join('');
+        } else {
+            resultContent = formatAnyContent(item.content);
+        }
         container.innerHTML = `
 <details class="tool-details">
     <summary>
         <div class="tool-header">
-            <div class="tool-icon">
-                <i class="fas fa-file-alt"></i>
+            <div class="tool-icon ${statusClass}">
+                <i class="fas ${statusIcon}"></i>
             </div>
             <div class="tool-info">
-                <div class="tool-name">Tool result</div>
-                <div class="tool-meta">Length: ${contentLength} chars</div>
+                <div class="tool-call">Tool result: ${statusText}</div>
             </div>
             <div class="tool-status">
                 <i class="fas fa-chevron-down"></i>
@@ -490,8 +503,10 @@ function appendToolBlock(item, key) {
     </summary>
     <div class="tool-content">
         <div class="tool-result">
-            <div class="tool-label">${item.is_error ? 'Error Details:' : 'Result:'}</div>
-            ${resultHtml}
+            <div class="tool-label">Output:</div>
+            <div class="tool-result-content">
+                ${resultContent}
+            </div>
         </div>
     </div>
 </details>`;
@@ -513,23 +528,48 @@ function appendToolBlock(item, key) {
 // ================== UTILITY FOR FORMATTING CONTENT (JSON, MD, ETC.) ==================
 function formatAnyContent(content) {
     if (typeof content === 'string') {
-        // Try JSON parse
+        // Check if it's base64 image data
+        if (isBase64ImageData(content)) {
+            return `<img src="data:image/png;base64,${content}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Generated image" />`;
+        }
+        // Try JSON parse for other content
         try {
-            const obj = JSON.parse(content);
-            return `<pre>${escapeHTML(JSON.stringify(obj, null, 2))}</pre>`;
+            const parsed = JSON.parse(content);
+            return '<pre><code>' + escapeHTML(JSON.stringify(parsed, null, 2)) + '</code></pre>';
         } catch {
-            // fallback to markdown
             return formatMarkdown(content);
         }
     }
 
     if (content && typeof content === 'object') {
-        // plain object → JSON
-        return `<pre>${escapeHTML(JSON.stringify(content, null, 2))}</pre>`;
+        // Check if object contains image data
+        if (content.type === 'image' && content.data) {
+            return `<img src="data:image/png;base64,${content.data}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Generated image" />`;
+        }
+        // Handle array of content blocks
+        if (Array.isArray(content)) {
+            return content.map(item => {
+                if (item.type === 'image' && item.data) {
+                    return `<img src="data:image/png;base64,${item.data}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Generated image" />`;
+                } else if (item.type === 'text') {
+                    return formatMarkdown(item.text || '');
+                }
+                return formatAnyContent(item);
+            }).join('<br>');
+        }
+        // Plain object → JSON
+        return '<pre><code>' + escapeHTML(JSON.stringify(content, null, 2)) + '</code></pre>';
     }
 
     // fallback
     return String(content);
+}
+
+// Add helper function to detect base64 image data
+function isBase64ImageData(str) {
+    if (typeof str !== 'string') return false;
+    // Check if it's a reasonable length for image data and is valid base64
+    return str.length > 100 && isBase64(str) && !str.includes('"') && !str.includes('{');
 }
 
 /** A naive Markdown transform */

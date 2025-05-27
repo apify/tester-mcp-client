@@ -238,6 +238,7 @@ export class ConversationManager {
         let lastError: Error | null = null;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
+                log.debug(`Making API call with ${this.conversation.length} messages`);
                 const response = await this.anthropic.messages.create({
                     model: this.modelName,
                     max_tokens: this.modelMaxOutputTokens,
@@ -254,6 +255,22 @@ export class ConversationManager {
             } catch (error) {
                 lastError = error as Error;
                 if (error instanceof Error) {
+                    // Log conversation state for debugging
+                    if (error.message.includes('tool_use_id') || error.message.includes('tool_result') || error.message.includes('at least one message')) {
+                        const conversationDebug = this.conversation.map((msg, index) => ({
+                            index,
+                            role: msg.role,
+                            contentTypes: Array.isArray(msg.content) 
+                                ? msg.content.map(block => block.type) 
+                                : 'string',
+                            contentLength: typeof msg.content === 'string' ? msg.content.length : msg.content.length
+                        }));
+                        
+                        log.error('Conversation structure error. Current conversation:', { 
+                            conversationLength: this.conversation.length,
+                            conversation: conversationDebug 
+                        });
+                    }
                     if (error.message.includes('429') || error.message.includes('529')) {
                         if (attempt < maxRetries) {
                             const delay = attempt * retryDelayMs;
@@ -310,28 +327,106 @@ export class ConversationManager {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const params = { name: block.name, arguments: block.input as any };
                 log.debug(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
-                // Create the tool result message structure upfront
+                // Enhanced tool result message structure
                 const msgUser = {
                     role: 'user' as const,
                     content: [{
                         tool_use_id: block.id,
                         type: 'tool_result' as const,
-                        content: '', // Placeholder, filled below
+                        content: [] as any[], // Will be array of content blocks
                         is_error: false,
                     }],
                 };
                 try {
                     const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
+                    
+                    // Enhanced content processing for images and mixed content
                     if (results.content instanceof Array && results.content.length !== 0) {
-                        const text = results.content.map((x) => x.text ?? x.data);
-                        msgUser.content[0].content = text.join('\n\n');
+                        const processedContent: any[] = [];
+                        processedContent.push({ 
+                            type: 'text',
+                            text: `Tool "${params.name}" executed successfully. Results:`
+                        }); // Tool execution info at the beginning
+                        for (const item of results.content) {
+                            if (item.type === 'image' && item.data) {
+                                // Detect image format from base64 data
+                                const imageData = item.data;
+                                let mediaType = 'image/png';
+                                
+                                try {
+                                    // Check the base64 data signature to determine format
+                                    const header = imageData.substring(0, 20);
+                                    
+                                    // JPEG signatures
+                                    if (header.startsWith('/9j/') || header.startsWith('iVBORw0KGgo')) {
+                                        if (header.startsWith('/9j/')) {
+                                            mediaType = 'image/jpeg';
+                                        } else if (header.startsWith('iVBORw0KGgo')) {
+                                            mediaType = 'image/png';
+                                        }
+                                    } else {
+                                        // Try to decode and check binary signature
+                                        const binaryString = atob(imageData.substring(0, 20));
+                                        const bytes = new Uint8Array(binaryString.length);
+                                        for (let i = 0; i < binaryString.length; i++) {
+                                            bytes[i] = binaryString.charCodeAt(i);
+                                        }
+                                        
+                                        // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+                                        if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+                                            mediaType = 'image/png';
+                                        }
+                                        // JPEG signature: FF D8 FF
+                                        else if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+                                            mediaType = 'image/jpeg';
+                                        }
+                                        // WebP signature: RIFF...WEBP
+                                        else if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+                                            mediaType = 'image/webp';
+                                        }
+                                    }
+                                } catch (error) {
+                                    log.warning(`Could not detect image format, using default PNG: ${error}`);
+                                    mediaType = 'image/png';
+                                }
+                                
+                                log.debug(`Detected image format: ${mediaType}`);
+                                processedContent.push({
+                                    type: 'image',
+                                    source: {
+                                        type: 'base64',
+                                        media_type: mediaType,
+                                        data: imageData
+                                    }
+                                });
+                            } else if (item.type === 'text' && item.text) {
+                                processedContent.push({
+                                    type: 'text',
+                                    text: item.text
+                                });
+                            } else if (item.data) {
+                                processedContent.push({
+                                    type: 'text',
+                                    text: typeof item.data === 'string' ? item.data : JSON.stringify(item.data, null, 2)
+                                });
+                            }
+                        }
+                        
+                        // Set the processed content
+                        msgUser.content[0].content = processedContent;
                     } else {
-                        msgUser.content[0].content = `No results retrieved from ${params.name}`;
+                        msgUser.content[0].content = [{
+                            type: 'text',
+                            text: `No results retrieved from ${params.name}`
+                        }];
                         msgUser.content[0].is_error = true;
                     }
                 } catch (error) {
                     log.error(`Error when calling tool ${params.name}: ${error}`);
-                    msgUser.content[0].content = `Error when calling tool ${params.name}, error: ${error}`;
+                    msgUser.content[0].content = [{
+                        type: 'text',
+                        text: `Error when calling tool ${params.name}, error: ${error}`
+                    }];
                     msgUser.content[0].is_error = true;
                 }
                 // Always add the tool result to the conversation and emit it
