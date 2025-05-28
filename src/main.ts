@@ -195,7 +195,9 @@ app.get('/sse', async (req, res) => {
  * @returns Client instance or throws error
  */
 async function getOrCreateClient(): Promise<Client> {
+    log.debug('Getting or creating MCP client');
     if (!client) {
+        log.debug('Creating new MCP client');
         try {
             client = await createClient(
                 runtimeSettings.mcpUrl,
@@ -250,7 +252,6 @@ app.post('/message', async (req, res) => {
         await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
         log.info(`Charged query answered event`);
 
-        await cleanupClient();
         // Send a finished flag
         await broadcastSSE({ role: 'system', content: '', finished: true });
         return res.json({ ok: true });
