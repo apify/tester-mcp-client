@@ -456,36 +456,37 @@ function appendToolBlock(item, key) {
         let statusClass = 'success';
         let statusIcon = 'fa-check-circle';
         let statusText = 'Success';
-        
+
         if (item.is_error) {
             statusClass = 'error';
             statusIcon = 'fa-exclamation-circle';
             statusText = 'Error';
         }
-        
+
         if (Array.isArray(item.content)) {
-            resultContent = item.content.map(contentItem => {
+            resultContent = item.content.map((contentItem) => {
                 if (typeof contentItem === 'object' && contentItem.type === 'image') {
                     // Handle both formats: direct data and Anthropic source format
                     let imageData = contentItem.data;
                     let mediaType = 'image/png'; // default fallback
-                    
+
                     if (!imageData && contentItem.source && contentItem.source.data) {
                         imageData = contentItem.source.data;
                         mediaType = contentItem.source.media_type || 'image/png';
                     }
-                    
+
                     if (imageData) {
                         return `<div class="image-result">
                             ${contentItem.text ? `<p>${contentItem.text}</p>` : ''}
                             <img src="data:${mediaType};base64,${imageData}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Tool result image" />
                         </div>`;
                     }
-                } else if (typeof contentItem === 'object' && contentItem.type === 'text') {
-                    return `<div class="text-result">${formatMarkdown(contentItem.text || '')}</div>`;
-                } else {
                     return formatAnyContent(contentItem);
                 }
+                if (typeof contentItem === 'object' && contentItem.type === 'text') {
+                    return `<div class="text-result">${formatMarkdown(contentItem.text || '')}</div>`;
+                }
+                return formatAnyContent(contentItem);
             }).join('');
         } else {
             resultContent = formatAnyContent(item.content);
@@ -539,7 +540,7 @@ function formatAnyContent(content) {
         // Try JSON parse for other content
         try {
             const parsed = JSON.parse(content);
-            return '<pre><code>' + escapeHTML(JSON.stringify(parsed, null, 2)) + '</code></pre>';
+            return `<pre><code>${escapeHTML(JSON.stringify(parsed, null, 2))}</code></pre>`;
         } catch {
             return formatMarkdown(content);
         }
@@ -553,18 +554,18 @@ function formatAnyContent(content) {
         }
         // Handle array of content blocks
         if (Array.isArray(content)) {
-            return content.map(item => {
+            return content.map((item) => {
                 if (item.type === 'image' && item.data) {
                     const mediaType = item.source?.media_type || 'image/png';
                     return `<img src="data:${mediaType};base64,${item.data}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Generated image" />`;
-                } else if (item.type === 'text') {
+                } if (item.type === 'text') {
                     return formatMarkdown(item.text || '');
                 }
                 return formatAnyContent(item);
             }).join('<br>');
         }
         // Plain object → JSON
-        return '<pre><code>' + escapeHTML(JSON.stringify(content, null, 2)) + '</code></pre>';
+        return `<pre><code>${escapeHTML(JSON.stringify(content, null, 2))}</code></pre>`;
     }
 
     // fallback
