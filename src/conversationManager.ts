@@ -11,7 +11,7 @@ import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
-import type { TokenCharger, Tool } from './types.js';
+import type { MessageParamWithBlocks, TokenCharger, Tool } from './types.js';
 import { pruneAndFixConversation } from './utils.js';
 
 if (typeof globalThis.EventSource === 'undefined') {
@@ -19,9 +19,12 @@ if (typeof globalThis.EventSource === 'undefined') {
 }
 
 // Define a default, can be overridden in constructor
-const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
+const DEFAULT_MAX_CONTEXT_TOKENS = 8_000;
 // Define a safety margin to avoid edge cases
 const CONTEXT_TOKEN_SAFETY_MARGIN = 0.99;
+// Minimum number of messages to keep in the conversation
+// This keeps one round of user and assistant messages
+const MIN_CONVERSATION_LENGTH = 2;
 
 export class ConversationManager {
     private conversation: MessageParam[] = [];
@@ -29,7 +32,7 @@ export class ConversationManager {
     private systemPrompt: string;
     private modelName: string;
     private modelMaxOutputTokens: number;
-    private maxNumberOfToolCallsPerQuery: number;
+    private maxNumberOfToolCallsPerQueryRound: number;
     private toolCallTimeoutSec: number;
     private readonly tokenCharger: TokenCharger | null;
     private tools: Tool[] = [];
@@ -49,7 +52,7 @@ export class ConversationManager {
         this.systemPrompt = systemPrompt;
         this.modelName = modelName;
         this.modelMaxOutputTokens = modelMaxOutputTokens;
-        this.maxNumberOfToolCallsPerQuery = maxNumberOfToolCallsPerQuery;
+        this.maxNumberOfToolCallsPerQueryRound = maxNumberOfToolCallsPerQuery;
         this.toolCallTimeoutSec = toolCallTimeoutSec;
         this.tokenCharger = tokenCharger;
         this.anthropic = new Anthropic({ apiKey });
@@ -57,8 +60,42 @@ export class ConversationManager {
         this.maxContextTokens = Math.floor(maxContextTokens * CONTEXT_TOKEN_SAFETY_MARGIN);
     }
 
+    /**
+     * Returns a flattened version of the conversation history, splitting messages with multiple content blocks
+     * into separate messages for each block. Text blocks are returned as individual messages with string content,
+     * while tool_use and tool_result blocks are returned as messages with a single-element content array.
+     *
+     * This is needed because of how the frontend client expects the conversation history to be structured.
+     *
+     * @returns {MessageParam[]} The flattened conversation history, with each message containing either a string (for text)
+     *                           or an array with a single tool_use/tool_result block.
+     */
     getConversation(): MessageParam[] {
-        return this.conversation;
+        // split messages blocks into separate messages with text or single block
+        const result: MessageParam[] = [];
+        for (const message of this.conversation) {
+            if (typeof message.content === 'string') {
+                result.push(message);
+                continue;
+            }
+
+            // Handle messages with content blocks
+            for (const block of message.content) {
+                if (block.type === 'text') {
+                    result.push({
+                        role: message.role,
+                        content: block.text || '',
+                    });
+                } else if (block.type === 'tool_use' || block.type === 'tool_result') {
+                    result.push({
+                        role: message.role,
+                        content: [block],
+                    });
+                }
+            }
+        }
+
+        return result;
     }
 
     resetConversation() {
@@ -93,7 +130,7 @@ export class ConversationManager {
         if (settings.systemPrompt !== undefined) this.systemPrompt = settings.systemPrompt;
         if (settings.modelName !== undefined && settings.modelName !== this.modelName) this.modelName = settings.modelName;
         if (settings.modelMaxOutputTokens !== undefined) this.modelMaxOutputTokens = settings.modelMaxOutputTokens;
-        if (settings.maxNumberOfToolCallsPerQuery !== undefined) this.maxNumberOfToolCallsPerQuery = settings.maxNumberOfToolCallsPerQuery;
+        if (settings.maxNumberOfToolCallsPerQuery !== undefined) this.maxNumberOfToolCallsPerQueryRound = settings.maxNumberOfToolCallsPerQuery;
         if (settings.toolCallTimeoutSec !== undefined) this.toolCallTimeoutSec = settings.toolCallTimeoutSec;
 
         return true;
@@ -186,11 +223,12 @@ export class ConversationManager {
      * Removes oldest messages if necessary.
      */
     private async ensureContextWindowLimit(): Promise<void> {
-        if (this.conversation.length <= 1) {
+        if (this.conversation.length <= MIN_CONVERSATION_LENGTH) {
             return;
         }
 
         let currentTokens = await this.countTokens(this.conversation);
+        log.debug(`[Context truncation] Current token count: ${currentTokens}, max allowed: ${this.maxContextTokens}`);
         if (currentTokens <= this.maxContextTokens) {
             log.info(`[Context truncation] Current token count (${currentTokens}) is within limit (${this.maxContextTokens}). No truncation needed.`);
             return;
@@ -199,18 +237,18 @@ export class ConversationManager {
         log.info(`[Context truncation] Current token count (${currentTokens}) exceeds limit (${this.maxContextTokens}). Truncating conversation...`);
         const initialMessagesCount = this.conversation.length;
 
-        while (currentTokens > this.maxContextTokens && this.conversation.length > 1) {
+        while (currentTokens > this.maxContextTokens && this.conversation.length > MIN_CONVERSATION_LENGTH) {
             try {
-                this.conversation.shift(); // Remove the oldest message
+                log.debug(`[Context truncation] Current token count: ${currentTokens}, removing oldest message... total messages length: ${this.conversation.length}`);
+                // Truncate oldest user and assistant messages round
+                // This has to be done because otherwise if we just remove the oldest message
+                // we end up with more context token than we started with (it does not make sense but it happens)
+                this.conversation.shift();
+                this.conversation.shift();
+                this.printConversation();
                 this.conversation = pruneAndFixConversation(this.conversation);
-                // if the oldest message is a tool result, remove the corresponding tool message as well
-                if (this.conversation.length > 1) {
-                    const firstMessage = this.conversation[0];
-                    if (Array.isArray(firstMessage.content) && firstMessage.content[0]?.type === 'tool_result') {
-                        this.conversation.shift();
-                    }
-                }
                 currentTokens = await this.countTokens(this.conversation);
+                log.debug(`[Context truncation] New token count after removal: ${currentTokens}`);
                 // Wait for a short period to avoid hitting the API too quickly
                 await new Promise<void>((resolve) => {
                     setTimeout(() => resolve(), 5);
@@ -224,6 +262,34 @@ export class ConversationManager {
                   + `Current token count: ${currentTokens}. Messages remaining: ${this.conversation.length}.`);
         // This is here mostly like a safety net, but it should not be needed
         this.conversation = pruneAndFixConversation(this.conversation);
+    }
+
+    /**
+     * @internal
+     * Debugging helper function that prints the current conversation state to the log.
+     * Iterates through all messages in the conversation, logging their roles and a truncated preview of their content.
+     * For messages with content blocks, logs details for each block, including text, tool usage, and tool results.
+     * Useful for inspecting the structure and flow of the conversation during development or troubleshooting.
+     */
+    private printConversation() {
+        log.debug(`[internal] createMessageWithRetry conversation length: ${this.conversation.length}`);
+        for (const message of this.conversation) {
+            log.debug(`[internal] ----- createMessageWithRetry message role: ${message.role} -----`);
+            if (typeof message.content === 'string') {
+                log.debug(`[internal] createMessageWithRetry message content: ${message.role}: ${message.content.substring(0, 50)}...`);
+                continue;
+            }
+            for (const block of message.content) {
+                if (block.type === 'text') {
+                    log.debug(`[internal] createMessageWithRetry block text: ${message.role}: ${block.text?.substring(0, 50)}...`);
+                } else if (block.type === 'tool_use') {
+                    log.debug(`[internal] createMessageWithRetry block tool_use: ${block.name}, input: ${JSON.stringify(block.input).substring(0, 50)}...`);
+                } else if (block.type === 'tool_result') {
+                    const content = typeof block.content === 'string' ? block.content.substring(0, 50) : JSON.stringify(block.content).substring(0, 50);
+                    log.debug(`[internal] createMessageWithRetry block tool_result: ${block.tool_use_id}, content: ${content}...`);
+                }
+            }
+        }
     }
 
     private async createMessageWithRetry(
@@ -279,73 +345,122 @@ export class ConversationManager {
         throw lastError ?? new Error('Unknown error after retries in createMessageWithRetry');
     }
 
-    async handleLLMResponse(client: Client, response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCount = 0) {
+    /**
+     * Handles the response from the LLM (Large Language Model), processes text and tool_use blocks,
+     * emits SSE events, manages tool execution, and recursively continues the conversation as needed.
+     *
+     * ## Flow:
+     * 1. Processes all text blocks in the LLM response and emits them as assistant messages.
+     * 2. Gathers all tool_use blocks:
+     *    - If tool_use blocks are present and the tool call limit is reached, emits a warning and stops further tool calls.
+     *    - Otherwise, emits tool_use blocks as assistant messages.
+     *    - The assistant message (containing only text) is added to the conversation history.
+     * 3. If there are no tool_use blocks, the function returns (end of this response cycle).
+     * 4. For each tool_use block:
+     *    - Calls the corresponding tool using the provided client.
+     *    - Emits the tool result (or error) as a user message via SSE.
+     *    - Appends the tool result to the conversation.
+     * 5. After processing all tool_use blocks, requests the next response from the LLM (using updated conversation).
+     * 6. Recursively calls itself to process the next LLM response, incrementing the tool call round counter.
+     *
+     * @param client - The MCP client used to call tools.
+     * @param response - The LLM response message to process.
+     * @param sseEmit - Function to emit SSE events to the client (role, content).
+     * @param toolCallCountRound - The current round of tool calls for this query (used to enforce limits).
+     * @returns A promise that resolves when the response and all recursive tool calls are fully processed.
+     */
+    async handleLLMResponse(client: Client, response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCountRound = 0) {
         log.debug(`[internal] handleLLMResponse: ${JSON.stringify(response)}`);
-        for (const block of response.content) {
-            if (block.type === 'text') {
-                this.conversation.push({ role: 'assistant', content: block.text || '' });
-                log.debug(`[internal] emitting SSE text message: ${block.text}`);
-                sseEmit('assistant', block.text || '');
-            } else if (block.type === 'tool_use') {
-                if (toolCallCount >= this.maxNumberOfToolCallsPerQuery) {
-                    const msg = `Too many tool calls in a single turn! This has been implemented to prevent infinite loops.
-                        Limit is ${this.maxNumberOfToolCallsPerQuery}.
-                        You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
-                    this.conversation.push({ role: 'assistant', content: msg });
-                    log.debug(`[internal] emitting SSE tool limit message: ${msg}`);
-                    sseEmit('assistant', msg);
-                    const finalResponse = await this.createMessageWithRetry();
-                    this.conversation.push({ role: 'assistant', content: finalResponse.content || '' });
-                    log.debug(`[internal] emitting SSE tool limit final message: ${finalResponse.content}`);
-                    sseEmit('assistant', finalResponse.content || '');
-                    return;
-                }
-                const msgAssistant = {
-                    role: 'assistant' as const,
-                    content: [{ id: block.id, input: block.input, name: block.name, type: 'tool_use' as const }],
-                };
-                this.conversation.push(msgAssistant);
-                log.debug(`[internal] emitting SSE tool_use message: ${JSON.stringify(msgAssistant)}`);
-                sseEmit(msgAssistant.role, msgAssistant.content);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const params = { name: block.name, arguments: block.input as any };
-                log.debug(`[internal] Calling tool (count: ${toolCallCount}): ${JSON.stringify(params)}`);
-                // Create the tool result message structure upfront
-                const msgUser = {
-                    role: 'user' as const,
-                    content: [{
-                        tool_use_id: block.id,
-                        type: 'tool_result' as const,
-                        content: '', // Placeholder, filled below
-                        is_error: false,
-                    }],
-                };
-                try {
-                    const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
-                    if (results.content instanceof Array && results.content.length !== 0) {
-                        const text = results.content.map((x) => x.text ?? x.data);
-                        msgUser.content[0].content = text.join('\n\n');
-                    } else {
-                        msgUser.content[0].content = `No results retrieved from ${params.name}`;
-                        msgUser.content[0].is_error = true;
-                    }
-                } catch (error) {
-                    log.error(`Error when calling tool ${params.name}: ${error}`);
-                    msgUser.content[0].content = `Error when calling tool ${params.name}, error: ${error}`;
-                    msgUser.content[0].is_error = true;
-                }
-                // Always add the tool result to the conversation and emit it
-                this.conversation.push(msgUser);
-                log.debug(`[internal] emitting SSE tool_result message: ${JSON.stringify(msgUser)}`);
-                sseEmit(msgUser.role, msgUser.content);
-                // Get next response from Claude
-                log.debug('[internal] Get model response from tool result');
-                const nextResponse: Message = await this.createMessageWithRetry();
-                log.debug('[internal] Received response from model');
-                await this.handleLLMResponse(client, nextResponse, sseEmit, toolCallCount + 1);
-                log.debug('[internal] Finished processing tool result');
-            }
+
+        const textBlocks = response.content.filter((block) => block.type === 'text');
+        const toolUseBlocks = response.content.filter((block) => block.type === 'tool_use');
+
+        // Append and emit text blocks
+        const assistantMessage: MessageParamWithBlocks = {
+            role: 'assistant',
+            content: [],
+        };
+        for (const block of textBlocks) {
+            assistantMessage.content.push(block);
+            log.debug(`[internal] emitting SSE text message: ${block.text}`);
+            sseEmit('assistant', block.text || '');
         }
+        // Handle tool call limits
+        if (toolUseBlocks.length > 0 && toolCallCountRound >= this.maxNumberOfToolCallsPerQueryRound) {
+            const msg = `Too many tool calls in a single turn! This has been implemented to prevent infinite loops.
+                Limit is ${this.maxNumberOfToolCallsPerQueryRound}.
+                You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
+            assistantMessage.content.push({
+                type: 'text',
+                text: msg,
+            });
+            log.debug(`[internal] emitting SSE tool limit message: ${msg}`);
+            sseEmit('assistant', msg);
+            this.conversation.push(assistantMessage);
+            return;
+        }
+        // Append and emit tool_use blocks
+        for (const block of toolUseBlocks) {
+            assistantMessage.content.push(block);
+            log.debug(`[internal] emitting SSE tool_use message: ${JSON.stringify(block)}`);
+            sseEmit('assistant', [block]);
+        }
+        // Add the assistant message to the conversation
+        // Assistant's turn is finished here, now we proceed with user if there are tool_use blocks
+        // if not we just return
+        this.conversation.push(assistantMessage);
+        // If no tool_use blocks, we can return early
+        if (toolUseBlocks.length === 0) {
+            log.debug('[internal] No tool_use blocks found, returning from handleLLMResponse');
+            return;
+        }
+
+        // Handle tool_use blocks
+        // call tools and append and emit tool result messages
+        const userToolResultsMessage: MessageParamWithBlocks = {
+            role: 'user',
+            content: [],
+        };
+        // If we have tool_use blocks, we need to call the tools
+        for (const block of toolUseBlocks) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const params = { name: block.name, arguments: block.input as any };
+            log.debug(`[internal] Calling tool (count: ${toolCallCountRound}): ${JSON.stringify(params)}`);
+            const toolResultBlock: ContentBlockParam = {
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: '',
+                is_error: false,
+            };
+            try {
+                const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
+                if (results.content instanceof Array && results.content.length !== 0) {
+                    const text = results.content.map((x) => x.text ?? x.data);
+                    toolResultBlock.content = text.join('\n\n');
+                } else {
+                    toolResultBlock.content = `No results retrieved from ${params.name}`;
+                    toolResultBlock.is_error = true;
+                }
+            } catch (error) {
+                log.error(`Error when calling tool ${params.name}: ${error}`);
+                toolResultBlock.content = `Error when calling tool ${params.name}, error: ${error}`;
+                toolResultBlock.is_error = true;
+            }
+
+            userToolResultsMessage.content.push(toolResultBlock);
+            log.debug(`[internal] emitting SSE tool_result message: ${JSON.stringify(toolResultBlock)}`);
+            sseEmit('user', [toolResultBlock]);
+        }
+
+        // Add the user tool results message to the conversation
+        this.conversation.push(userToolResultsMessage);
+        // If we have tool results, we need to get the next response from the model
+        log.debug('[internal] Get model response from tool result');
+        const nextResponse: Message = await this.createMessageWithRetry();
+        log.debug('[internal] Received response from model');
+        // Process the next response recursively
+        await this.handleLLMResponse(client, nextResponse, sseEmit, toolCallCountRound + 1);
+        log.debug('[internal] Finished processing tool result');
     }
 
     /**

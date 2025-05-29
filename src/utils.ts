@@ -1,5 +1,4 @@
 import type { ContentBlockParam, MessageParam } from '@anthropic-ai/sdk/resources';
-import { log } from 'apify';
 
 import { IMAGE_BASE64_PLACEHOLDER } from './const.js';
 
@@ -25,11 +24,6 @@ export function isBase64(str: string): boolean {
 export function pruneAndFixConversation(conversation: MessageParam[]): MessageParam[] {
     // Create a shallow copy of the conversation array
     const prunedAndFixedConversation: MessageParam[] = [];
-
-    // Maps tool use blockID to message index
-    const toolUseMap = new Map<string, number>();
-    // Maps tool result tool use block ID to message index
-    const toolResultMap = new Map<string, number>();
 
     // First pass: prune base64 content and collect tool IDs
     for (let m = 0; m < conversation.length; m++) {
@@ -58,13 +52,10 @@ export function pruneAndFixConversation(conversation: MessageParam[]): MessagePa
             }
 
             if (block.type === 'tool_use') {
-                toolUseMap.set(block.id, m);
                 return block;
             }
 
             if (block.type === 'tool_result') {
-                toolResultMap.set(block.tool_use_id, m);
-
                 // Handle base64 encoded tool_result content (string)
                 if (typeof block.content === 'string' && isBase64(block.content)) {
                     return {
@@ -86,81 +77,29 @@ export function pruneAndFixConversation(conversation: MessageParam[]): MessagePa
         });
     }
 
-    // Find missing tool use/result relationships
-    const toolResultBlocksWithoutUse = [];
-    const toolUseBlocksWithoutResult = [];
-
-    // Find missing relationships
-    for (const id of toolResultMap.keys()) {
-        if (!toolUseMap.has(id)) {
-            toolResultBlocksWithoutUse.push(id);
+    // If first message is an user with tool_result we need to add a dummy assistant message
+    // with a tool_use blocks to ensure the conversation is valid
+    const firstMessage = prunedAndFixedConversation[0];
+    // Get all tool_result blocks from the first message
+    const firstMessageToolResultBlocks = typeof firstMessage.content === 'string' ? [] : firstMessage.content.filter(
+        (block) => block.type === 'tool_result',
+    );
+    if (firstMessageToolResultBlocks.length > 0) {
+        if (firstMessage.role !== 'user') {
+            // just a sanity check
+            throw new Error('Message with tool_result must be from user');
         }
-    }
 
-    for (const id of toolUseMap.keys()) {
-        if (!toolResultMap.has(id)) {
-            toolUseBlocksWithoutResult.push(id);
-        }
-    }
-
-    // If no fixes needed, return the pruned conversation
-    if (toolResultBlocksWithoutUse.length === 0 && toolUseBlocksWithoutResult.length === 0) {
-        return prunedAndFixedConversation;
-    }
-
-    // Group missing relationships by message index
-    const toolResultMessagesWithoutUse = new Map<number, string[]>();
-    for (const id of toolResultBlocksWithoutUse) {
-        const messageIndex = toolResultMap.get(id);
-        if (messageIndex !== undefined) {
-            const existingIds = toolResultMessagesWithoutUse.get(messageIndex) || [];
-            existingIds.push(id);
-            toolResultMessagesWithoutUse.set(messageIndex, existingIds);
-        }
-    }
-
-    const toolUseMessagesWithoutResult = new Map<number, string[]>();
-    for (const id of toolUseBlocksWithoutResult) {
-        const messageIndex = toolUseMap.get(id);
-        if (messageIndex !== undefined) {
-            const existingIds = toolUseMessagesWithoutResult.get(messageIndex) || [];
-            existingIds.push(id);
-            toolUseMessagesWithoutResult.set(messageIndex, existingIds);
-        }
-    }
-
-    // Insert dummy messages where needed (working backwards to avoid index shifting issues)
-    for (let m = prunedAndFixedConversation.length - 1; m >= 0; m--) {
-        if (toolResultMessagesWithoutUse.has(m)) {
-            const blockIDs = toolResultMessagesWithoutUse.get(m) || [];
-            log.debug(`Adding dummy message with tool_use blocks for tool_result IDs: ${blockIDs}`);
-            prunedAndFixedConversation.splice(m, 0, {
-                role: 'assistant',
-                content: blockIDs.map((toolUseId) => ({
-                    type: 'tool_use',
-                    id: toolUseId,
-                    name: 'unknown_tool',
-                    input: {},
-                })),
-            });
-        } else if (toolUseMessagesWithoutResult.has(m)) {
-            // Don't add dummy tool_use for the last message
-            if (m === prunedAndFixedConversation.length - 1) {
-                log.debug(`Skipping dummy message for last tool_use message at index ${m}`);
-                continue;
-            }
-
-            const blockIDs = toolUseMessagesWithoutResult.get(m) || [];
-            log.debug(`Adding dummy message with tool_result blocks for tool_use IDs: ${blockIDs}`);
-            prunedAndFixedConversation.splice(m + 1, 0, {
-                role: 'user',
-                content: blockIDs.map((toolUseId) => ({
-                    type: 'tool_result',
-                    tool_use_id: toolUseId,
-                    content: '[Tool use without result - most likely tool failed or response was too large to be sent to LLM]',
-                })),
-            });
-        }
+        // Add a dummy assistant message with a tool_use block for each tool_result block
+        prunedAndFixedConversation.unshift({
+            role: 'assistant',
+            content: firstMessageToolResultBlocks.map((block) => ({
+                type: 'tool_use',
+                id: block.tool_use_id,
+                name: '[unknown tool - this was added by the conversation manager to keep the conversation valid]',
+                input: {},
+            })),
+        });
     }
 
     return prunedAndFixedConversation;
