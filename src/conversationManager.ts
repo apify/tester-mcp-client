@@ -19,7 +19,7 @@ if (typeof globalThis.EventSource === 'undefined') {
 }
 
 // Define a default, can be overridden in constructor
-const DEFAULT_MAX_CONTEXT_TOKENS = 8_000;
+const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
 // Define a safety margin to avoid edge cases
 const CONTEXT_TOKEN_SAFETY_MARGIN = 0.99;
 // Minimum number of messages to keep in the conversation
