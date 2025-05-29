@@ -35,12 +35,32 @@ await Actor.init();
  */
 export class ActorTokenCharger implements TokenCharger {
     async chargeTokens(inputTokens: number, outputTokens: number, modelName: string): Promise<void> {
-        const eventNameInput = modelName === 'claude-3-5-haiku-latest'
-            ? Event.INPUT_TOKENS_HAIKU_3_5
-            : Event.INPUT_TOKENS_SONNET_3_7;
-        const eventNameOutput = modelName === 'claude-3-5-haiku-latest'
-            ? Event.OUTPUT_TOKENS_HAIKU_3_5
-            : Event.OUTPUT_TOKENS_SONNET_3_7;
+        let eventNameInput: string;
+        let eventNameOutput: string;
+        switch (modelName) {
+            case 'claude-3-5-haiku-20241022':
+                eventNameInput = Event.INPUT_TOKENS_HAIKU_3_5;
+                eventNameOutput = Event.OUTPUT_TOKENS_HAIKU_3_5;
+                break;
+            case 'claude-3-7-sonnet-20250219':
+            case 'claude-3-5-sonnet-20241022':
+                eventNameInput = Event.INPUT_TOKENS_SONNET_3_7;
+                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_3_7;
+                break;
+            case 'claude-opus-4-20250514':
+                eventNameInput = Event.INPUT_TOKENS_OPUS_4;
+                eventNameOutput = Event.OUTPUT_TOKENS_OPUS_4;
+                break;
+            case 'claude-sonnet-4-20250514':
+                eventNameInput = Event.INPUT_TOKENS_SONNET_4;
+                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
+                break;
+            default:
+                // Default to Sonnet 3.7 for unknown models
+                eventNameInput = Event.INPUT_TOKENS_SONNET_3_7;
+                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_3_7;
+                break;
+        }
         try {
             await Actor.charge({ eventName: eventNameInput, count: Math.ceil(inputTokens / 100) });
             await Actor.charge({ eventName: eventNameOutput, count: Math.ceil(outputTokens / 100) });

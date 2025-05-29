@@ -45,14 +45,18 @@
             "description": "Select a model to be used for selecting tools and generating text.\n\n- Claude Sonnet 4 - the most intelligent model\n- Claude 3.7 Sonnet - highly intelligent model\n- Claude 3.5 Haiku - a fastest model",
             "editor": "select",
             "enum": [
+                "claude-opus-4-20250514",
                 "claude-sonnet-4-20250514",
                 "claude-3-7-sonnet-20250219",
+                "claude-3-5-sonnet-20241022",
                 "claude-3-5-haiku-20241022"
             ],
             "enumTitles": [
+                "Claude Opus 4",
                 "Claude Sonnet 4",
-                "Claude 3.7 Sonnet",
-                "Claude 3.5 Haiku"
+                "Claude Sonnet 3.7",
+                "Claude Sonnet 3.5",
+                "Claude Haiku 3.5"
             ],
             "default": "claude-sonnet-4-20250514"
         },
