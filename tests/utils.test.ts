@@ -98,7 +98,7 @@ describe('pruneAndFixConversation', () => {
         expect(result[2].content).toBe('that is some nice result you got there');
     });
 
-    it('should add dummy tool use for each orhapened tool result', () => {
+    it('should add dummy tool use for each orphaned tool result', () => {
         // it should add a message with a dummy tool use before each orphaned tool result
         const conversation: MessageParam[] = [
             {
