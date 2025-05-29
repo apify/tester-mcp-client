@@ -25,6 +25,7 @@ import { Counter } from './counter.js';
 import { processInput, getChargeForTokens } from './input.js';
 import { log } from './logger.js';
 import type { TokenCharger, Input } from './types.js';
+import inputSchema from '../.actor/input_schema.json' with { type: 'json' };
 
 await Actor.init();
 
@@ -344,6 +345,18 @@ app.get('/available-tools', async (_req, res) => {
  */
 app.get('/settings', (_req, res) => {
     res.json(runtimeSettings);
+});
+
+/**
+ * GET /schema/models endpoint to retrieve available model options from input schema
+ */
+app.get('/schema/models', (_req, res) => {
+    const { enum: models, enumTitles } = inputSchema.properties.modelName;
+    const modelOptions = models.map((model: string, index: number) => ({
+        value: model,
+        label: enumTitles[index],
+    }));
+    res.json(modelOptions);
 });
 
 /**

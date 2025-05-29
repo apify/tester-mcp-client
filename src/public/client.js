@@ -214,6 +214,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     const toolCallTimeoutInput = document.getElementById('toolCallTimeoutInput');
     const systemPromptInput = document.getElementById('systemPromptInput');
     const resetSettingsBtn = document.getElementById('resetSettingsBtn');
+    // Function to load model options dynamically
+    async function loadModelOptions() {
+        try {
+            const resp = await fetch('/schema/models');
+            const modelOptions = await resp.json();
+            modelNameSelect.innerHTML = '';
+            modelOptions.forEach((option) => {
+                const optionElement = document.createElement('option');
+                optionElement.value = option.value;
+                optionElement.textContent = option.label;
+                modelNameSelect.appendChild(optionElement);
+            });
+        } catch (err) {
+            console.error('Error loading model options:', err);
+            showNotification('Failed to load model options. Using defaults.', 'warning');
+        }
+    }
+    await loadModelOptions();
     // Load current settings
     try {
         const resp = await fetch('/settings');
@@ -266,6 +284,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const resp = await fetch('/settings/reset', { method: 'POST' });
             const result = await resp.json();
             if (result.success) {
+                await loadModelOptions();
                 // Reload the form with defaults from the server
                 const settingsResp = await fetch('/settings');
                 const settings = await settingsResp.json();
