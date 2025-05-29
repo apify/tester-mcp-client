@@ -337,7 +337,6 @@ function fixMessageOrder() {
             }
         } catch (error) {
             console.error('Error reordering message:', error);
-            continue;
         }
     }
 }
@@ -566,16 +565,6 @@ async function sendQuery(query) {
     // First append the user message
     appendMessage('user', query);
 
-    // Safety timeout to re-enable the button if we don't get a response
-    const safetyTimeout = setTimeout(() => {
-        if (isProcessingMessage) {
-            console.warn('Safety timeout reached - re-enabling send button');
-            isProcessingMessage = false;
-            sendBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
-            queryInput.focus();
-        }
-    }, 60_000); // 60 seconds timeout
-
     try {
         const resp = await fetch('/message', {
             method: 'POST',
@@ -590,9 +579,6 @@ async function sendQuery(query) {
     } catch (err) {
         console.log('Network error:', err);
         appendMessage('internal', 'Network error. Try to reconnect or reload page');
-    } finally {
-        // Clear the safety timeout
-        clearTimeout(safetyTimeout);
     }
 }
 
