@@ -275,8 +275,6 @@ app.get('/reconnect-mcp-server', async (_req, res) => {
     } catch (err) {
         const error = err as Error;
         return res.json({ ok: false, error: error.message });
-    } finally {
-        await cleanupClient();
     }
 });
 
@@ -335,8 +333,6 @@ app.get('/available-tools', async (_req, res) => {
         const error = err as Error;
         log.error(`Error fetching tools: ${error.message}`);
         return res.status(500).json({ error: 'Failed to fetch tools' });
-    } finally {
-        await cleanupClient();
     }
 });
 
