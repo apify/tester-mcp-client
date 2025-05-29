@@ -511,13 +511,29 @@ function appendToolBlock(item, key) {
 }
 
 // ================== UTILITY FOR FORMATTING CONTENT (JSON, MD, ETC.) ==================
+
+/** HTML escaper for <pre> blocks, etc. */
+function escapeHTML(str) {
+    if (typeof str !== 'string') return String(str);
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 function formatAnyContent(content) {
     if (typeof content === 'string') {
-        // Try JSON parse
+        // Try JSON parse first
         try {
             const obj = JSON.parse(content);
             return `<pre>${escapeHTML(JSON.stringify(obj, null, 2))}</pre>`;
         } catch {
+            // Looks like truncated JSON
+            const trimmed = content.trim();
+            if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && 
+                (trimmed.includes('"') || trimmed.includes(':'))) {
+                return `<pre>${escapeHTML(formatLikeJSON(trimmed))}</pre>`;
+            }
             // fallback to markdown
             return formatMarkdown(content);
         }
@@ -547,13 +563,58 @@ function formatMarkdown(text) {
     return safe;
 }
 
-/** HTML escaper for <pre> blocks, etc. */
-function escapeHTML(str) {
-    if (typeof str !== 'string') return String(str);
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+// Helper function to add basic indentation to JSON-like strings
+function formatLikeJSON(str) {
+    let indentLevel = 0;
+    let result = '';
+    let inString = false;
+    let escaped = false;
+    
+    for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        const nextChar = str[i + 1];
+        
+        if (!inString) {
+            if (char === '"' && !escaped) {
+                inString = true;
+            } else if (char === '{' || char === '[') {
+                result += char;
+                indentLevel++;
+                if (nextChar && nextChar !== '}' && nextChar !== ']') {
+                    result += '\n' + '  '.repeat(indentLevel);
+                }
+                continue;
+            } else if (char === '}' || char === ']') {
+                if (result[result.length - 1] !== '\n') {
+                    result += '\n' + '  '.repeat(indentLevel - 1);
+                } else {
+                    result = result.trimEnd() + '\n' + '  '.repeat(indentLevel - 1);
+                }
+                indentLevel--;
+                result += char;
+                if (nextChar && nextChar === ',' && str[i + 2]) {
+                    result += ',\n' + '  '.repeat(indentLevel);
+                    i++; // skip the comma
+                }
+                continue;
+            } else if (char === ',' && !inString) {
+                result += char + '\n' + '  '.repeat(indentLevel);
+                continue;
+            } else if (char === ':' && !inString) {
+                result += char + ' ';
+                continue;
+            }
+        } else {
+            if (char === '"' && !escaped) {
+                inString = false;
+            }
+        }
+        
+        escaped = (char === '\\' && !escaped);
+        result += char;
+    }
+    
+    return result;
 }
 
 // ================== SENDING A USER QUERY (POST /message) ==================
