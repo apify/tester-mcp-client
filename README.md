@@ -18,14 +18,14 @@ Navigate to https://...apify.net to interact with chat-ui interface.
 
 - 🔌 Connects to an MCP server using Server-Sent Events (SSE)
 - 💬 Provides a chat-like UI for displaying tool calls and results
-- 🇦 Connects to an [Apify MCP Server](https://apify.com/apify/actors-mcp-server) for interacting with one or more Apify Actors
+- 🇦 Connects to an [Apify MCP Server](https://mcp.apify.com) for interacting with one or more Apify Actors
 - 💥 Dynamically uses tools based on context and user queries (if supported by a server)
 - 🔓 Use Authorization headers and API keys for secure connections
 - 🪟 Open source, so you can review it, suggest improvements, or modify it
 
 ## 🎯 What does Tester MCP Client do?
 
-When connected to [Actors-MCP-Server](https://apify.com/apify/actors-mcp-server) the Tester MCP Client provides an interactive chat interface where you can:
+When connected to [Apify MCP Server](https://mcp.apify.com/) the Tester MCP Client provides an interactive chat interface where you can:
 
 - "What are the most popular Actors for social media scraping?"
 - "Show me the best way to use the Instagram Scraper"
@@ -47,7 +47,7 @@ The Apify MCP Client connects to a running MCP server over Server-Sent Events (S
 ## ⚙️ Usage
 
 - Test any MCP server over SSE
-- Test [Apify Actors MCP Server](https://apify.com/apify/actors-mcp-server) and ability to dynamically select amongst 3000+ tools
+- Test [Apify MCP Server](https://mcp.apify.com/) and ability to dynamically select amongst thousands of tools
 
 ### Normal Mode (on Apify)
 
