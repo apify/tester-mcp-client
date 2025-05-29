@@ -38,27 +38,23 @@ export class ActorTokenCharger implements TokenCharger {
         let eventNameInput: string;
         let eventNameOutput: string;
         switch (modelName) {
+            // We keep "latest" models for users with old Apify console saved input
             case 'claude-3-5-haiku-20241022':
+            case 'claude-3-5-haiku-latest':
                 eventNameInput = Event.INPUT_TOKENS_HAIKU_3_5;
                 eventNameOutput = Event.OUTPUT_TOKENS_HAIKU_3_5;
                 break;
-            case 'claude-3-7-sonnet-20250219':
-            case 'claude-3-5-sonnet-20241022':
+            case 'claude-3-7-sonnet-latest':
                 eventNameInput = Event.INPUT_TOKENS_SONNET_3_7;
                 eventNameOutput = Event.OUTPUT_TOKENS_SONNET_3_7;
-                break;
-            case 'claude-opus-4-20250514':
-                eventNameInput = Event.INPUT_TOKENS_OPUS_4;
-                eventNameOutput = Event.OUTPUT_TOKENS_OPUS_4;
                 break;
             case 'claude-sonnet-4-20250514':
                 eventNameInput = Event.INPUT_TOKENS_SONNET_4;
                 eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
                 break;
             default:
-                // Default to Sonnet 3.7 for unknown models
-                eventNameInput = Event.INPUT_TOKENS_SONNET_3_7;
-                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_3_7;
+                eventNameInput = Event.INPUT_TOKENS_SONNET_4;
+                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
                 break;
         }
         try {

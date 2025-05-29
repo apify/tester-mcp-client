@@ -9,16 +9,6 @@
         "eventDescription": "Cost per running time for each 5 minutes.",
         "eventPriceUsd":0.005
     },
-    "input-tokens-opus-4": {
-        "eventTitle": "100 input tokens (Opus-4)",
-        "eventDescription": "Cost per 100 input tokens for Claude 4 Opus (1M tokens = 15$).",
-        "eventPriceUsd": 0.0015
-    },
-    "output-tokens-opus-4": {
-        "eventTitle": "100 output tokens (Opus-4)",
-        "eventDescription": "Cost per 100 output tokens for Claude 4 Opus (1M tokens = 75$).",
-        "eventPriceUsd": 0.0075
-    },
     "input-tokens-sonnet-4": {
         "eventTitle": "100 input tokens (Sonnet-4)",
         "eventDescription": "Cost per 100 input tokens for Claude 4 Sonnet (1M tokens = 3$).",

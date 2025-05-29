@@ -24,8 +24,6 @@ export const Event = {
     OUTPUT_TOKENS_SONNET_3_7: 'output-tokens-sonnet-3-7',
     INPUT_TOKENS_HAIKU_3_5: 'input-tokens-haiku-3-5',
     OUTPUT_TOKENS_HAIKU_3_5: 'output-tokens-haiku-3-5',
-    INPUT_TOKENS_OPUS_4: 'input-tokens-opus-4',
-    OUTPUT_TOKENS_OPUS_4: 'output-tokens-opus-4',
     INPUT_TOKENS_SONNET_4: 'input-tokens-sonnet-4',
     OUTPUT_TOKENS_SONNET_4: 'output-tokens-sonnet-4',
     QUERY_ANSWERED: 'query-answered',
