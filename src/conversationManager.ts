@@ -372,38 +372,35 @@ export class ConversationManager {
     async handleLLMResponse(client: Client, response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCountRound = 0) {
         log.debug(`[internal] handleLLMResponse: ${JSON.stringify(response)}`);
 
-        const textBlocks = response.content.filter((block) => block.type === 'text');
-        const toolUseBlocks = response.content.filter((block) => block.type === 'tool_use');
-
-        // Append and emit text blocks
+        // Refactored: preserve block order as received
         const assistantMessage: MessageParamWithBlocks = {
             role: 'assistant',
             content: [],
         };
-        for (const block of textBlocks) {
-            assistantMessage.content.push(block);
-            log.debug(`[internal] emitting SSE text message: ${block.text}`);
-            sseEmit('assistant', block.text || '');
-        }
-        // Handle tool call limits
-        if (toolUseBlocks.length > 0 && toolCallCountRound >= this.maxNumberOfToolCallsPerQueryRound) {
-            const msg = `Too many tool calls in a single turn! This has been implemented to prevent infinite loops.
-                Limit is ${this.maxNumberOfToolCallsPerQueryRound}.
-                You can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
-            assistantMessage.content.push({
-                type: 'text',
-                text: msg,
-            });
-            log.debug(`[internal] emitting SSE tool limit message: ${msg}`);
-            sseEmit('assistant', msg);
-            this.conversation.push(assistantMessage);
-            return;
-        }
-        // Append and emit tool_use blocks
-        for (const block of toolUseBlocks) {
-            assistantMessage.content.push(block);
-            log.debug(`[internal] emitting SSE tool_use message: ${JSON.stringify(block)}`);
-            sseEmit('assistant', [block]);
+        const toolUseBlocks: ContentBlockParam[] = [];
+        for (const block of response.content) {
+            if (block.type === 'text') {
+                assistantMessage.content.push(block);
+                log.debug(`[internal] emitting SSE text message: ${block.text}`);
+                sseEmit('assistant', block.text || '');
+            } else if (block.type === 'tool_use') {
+                if (toolCallCountRound >= this.maxNumberOfToolCallsPerQueryRound) {
+                    // Tool call limit hit before any tool_use is processed
+                    const msg = `Too many tool calls in a single turn! This has been implemented to prevent infinite loops.\nLimit is ${this.maxNumberOfToolCallsPerQueryRound}.\nYou can increase the limit by setting the "maxNumberOfToolCallsPerQuery" parameter.`;
+                    assistantMessage.content.push({
+                        type: 'text',
+                        text: msg,
+                    });
+                    log.debug(`[internal] emitting SSE tool limit message: ${msg}`);
+                    sseEmit('assistant', msg);
+                    this.conversation.push(assistantMessage);
+                    break;
+                }
+                assistantMessage.content.push(block);
+                log.debug(`[internal] emitting SSE tool_use message: ${JSON.stringify(block)}`);
+                sseEmit('assistant', [block]);
+                toolUseBlocks.push(block);
+            }
         }
         // Add the assistant message to the conversation
         // Assistant's turn is finished here, now we proceed with user if there are tool_use blocks
@@ -421,8 +418,8 @@ export class ConversationManager {
             role: 'user',
             content: [],
         };
-        // If we have tool_use blocks, we need to call the tools
         for (const block of toolUseBlocks) {
+            if (block.type !== 'tool_use') continue; // Type guard
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const params = { name: block.name, arguments: block.input as any };
             log.debug(`[internal] Calling tool (count: ${toolCallCountRound}): ${JSON.stringify(params)}`);
