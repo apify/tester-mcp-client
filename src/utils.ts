@@ -1,5 +1,6 @@
 import type { ContentBlockParam, MessageParam } from '@anthropic-ai/sdk/resources';
-import { log } from 'apify';
+
+import { IMAGE_BASE64_PLACEHOLDER } from './const.js';
 
 export function isBase64(str: string): boolean {
     if (!str) {
@@ -15,105 +16,91 @@ export function isBase64(str: string): boolean {
 /**
 * Prunes base64 encoded messages from the conversation and replaces them with a placeholder to save context tokens.
 * Also adds fake tool_result messages for tool_use messages that don't have a corresponding tool_result message.
+* Also adds fake tool_use messages for tool_result messages that don't have a corresponding tool_use message.
 * Ensures tool_result blocks reference valid tool_use IDs.
 * @param conversation
 * @returns
 */
 export function pruneAndFixConversation(conversation: MessageParam[]): MessageParam[] {
-    const prunedConversation = JSON.parse(JSON.stringify(conversation)) as MessageParam[];
-    // Storing both in case the messages are in wrong order
-    const toolUseIDs = new Set<string>();
-    const toolResultIDs = new Set<string>();
+    // Create a shallow copy of the conversation array
+    const prunedAndFixedConversation: MessageParam[] = [];
 
-    for (let m = 0; m < prunedConversation.length; m++) {
-        const message = prunedConversation[m];
+    // First pass: prune base64 content and collect tool IDs
+    for (let m = 0; m < conversation.length; m++) {
+        const message = conversation[m];
 
         // Handle simple string messages
-        if (typeof message.content === 'string' && isBase64(message.content)) {
-            prunedConversation[m] = {
-                role: message.role,
-                content: '[Base64 encoded content]',
-            };
+        if (typeof message.content === 'string') {
+            prunedAndFixedConversation.push({
+                ...message,
+                content: isBase64(message.content) ? IMAGE_BASE64_PLACEHOLDER : message.content,
+            });
             continue;
         }
 
         // Handle messages with content blocks
         const contentBlocks = message.content as ContentBlockParam[];
-        for (let i = 0; i < contentBlocks.length; i++) {
-            const block = contentBlocks[i];
-            // Handle base64 encoded content
+        const processedBlocks = contentBlocks.map((block) => {
+            // Handle different block types
             if (block.type === 'text' && isBase64(block.text)) {
-                contentBlocks[i] = {
+                return {
                     type: 'text',
-                    text: '[Base64 encoded content]',
-                };
-            } else if (block.type === 'tool_result' && typeof block.content === 'string' && isBase64(block.content)) {
-                contentBlocks[i] = {
-                    type: 'tool_result',
-                    content: '[Base64 encoded content]',
-                    tool_use_id: block.tool_use_id,
-                    is_error: block.is_error,
+                    text: IMAGE_BASE64_PLACEHOLDER,
                     cache_control: block.cache_control,
+                    citations: block.citations,
                 };
-            } else if (block.type === 'tool_result' && Array.isArray(block.content)) {
-                for (let j = 0; j < block.content.length; j++) {
-                    const contentBlock = block.content[j];
-                    if (contentBlock.type === 'text' && isBase64(contentBlock.text)) {
-                        block.content[j] = {
-                            type: 'text',
-                            text: '[Base64 encoded content]',
-                            cache_control: contentBlock.cache_control,
-                            citations: contentBlock.citations,
-                        };
-                    }
+            }
+
+            if (block.type === 'tool_use') {
+                return block;
+            }
+
+            if (block.type === 'tool_result') {
+                // Handle base64 encoded tool_result content (string)
+                if (typeof block.content === 'string' && isBase64(block.content)) {
+                    return {
+                        type: 'tool_result',
+                        content: IMAGE_BASE64_PLACEHOLDER,
+                        tool_use_id: block.tool_use_id,
+                        is_error: block.is_error,
+                        cache_control: block.cache_control,
+                    };
                 }
             }
 
-            // Handle tool calls
-            if (block.type === 'tool_use') {
-                toolUseIDs.add(block.id);
-            } else if (block.type === 'tool_result') {
-                toolResultIDs.add(block.tool_use_id);
-            }
+            return block;
+        }) as ContentBlockParam[];
+
+        prunedAndFixedConversation.push({
+            role: message.role,
+            content: processedBlocks,
+        });
+    }
+
+    // If first message is an user with tool_result we need to add a dummy assistant message
+    // with a tool_use blocks to ensure the conversation is valid
+    const firstMessage = prunedAndFixedConversation[0];
+    // Get all tool_result blocks from the first message
+    const firstMessageToolResultBlocks = typeof firstMessage.content === 'string' ? [] : firstMessage.content.filter(
+        (block) => block.type === 'tool_result',
+    );
+    if (firstMessageToolResultBlocks.length > 0) {
+        if (firstMessage.role !== 'user') {
+            // just a sanity check
+            throw new Error('Message with tool_result must be from user');
         }
+
+        // Add a dummy assistant message with a tool_use block for each tool_result block
+        prunedAndFixedConversation.unshift({
+            role: 'assistant',
+            content: firstMessageToolResultBlocks.map((block) => ({
+                type: 'tool_use',
+                id: block.tool_use_id,
+                name: '[unknown tool - this was added by the conversation manager to keep the conversation valid]',
+                input: {},
+            })),
+        });
     }
 
-    // Find tool_result blocks without corresponding tool_use blocks
-    const toolResultIDsWithoutUse = Array.from(toolResultIDs).filter((id) => !toolUseIDs.has(id));
-    // Find tool_use blocks without corresponding tool_result blocks
-    const toolUseIDsWithoutResult = Array.from(toolUseIDs).filter((id) => !toolResultIDs.has(id));
-
-    if (toolUseIDsWithoutResult.length === 0 && toolResultIDsWithoutUse.length === 0) {
-        return prunedConversation;
-    }
-
-    const fixedConversation: MessageParam[] = [];
-    for (let m = 0; m < prunedConversation.length; m++) {
-        const message = prunedConversation[m];
-        fixedConversation.push(message);
-
-        if (typeof message.content === 'string') continue;
-
-        const contentBlocks = message.content as ContentBlockParam[];
-        for (let i = 0; i < contentBlocks.length; i++) {
-            const block = contentBlocks[i];
-            if (block.type === 'tool_use') {
-                const toolUseId = (block as ContentBlockParam & { id: string }).id;
-                if (toolUseIDsWithoutResult.includes(toolUseId)) {
-                    log.debug(`Adding fake tool_result message for tool_use with ID: ${toolUseId}`);
-                    fixedConversation.push({
-                        role: 'user',
-                        content: [
-                            {
-                                type: 'tool_result',
-                                tool_use_id: toolUseId,
-                                content: '[Tool use without result - most likely tool failed or response was too large to be sent to LLM]',
-                            },
-                        ],
-                    });
-                }
-            }
-        }
-    }
-    return fixedConversation;
+    return prunedAndFixedConversation;
 }
