@@ -352,6 +352,7 @@ export class ConversationManager {
                                 // Detect image format from base64 data
                                 const imageData = item.data;
                                 let mediaType = 'image/png';
+                                // Anthropic's API requires the correct MIME 
                                 
                                 try {
                                     // Check the base64 data signature to determine format

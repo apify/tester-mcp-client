@@ -468,13 +468,17 @@ function appendToolBlock(item, key) {
                 if (typeof contentItem === 'object' && contentItem.type === 'image') {
                     // Handle both formats: direct data and Anthropic source format
                     let imageData = contentItem.data;
+                    let mediaType = 'image/png'; // default fallback
+                    
                     if (!imageData && contentItem.source && contentItem.source.data) {
                         imageData = contentItem.source.data;
+                        mediaType = contentItem.source.media_type || 'image/png';
                     }
+                    
                     if (imageData) {
                         return `<div class="image-result">
                             ${contentItem.text ? `<p>${contentItem.text}</p>` : ''}
-                            <img src="data:image/png;base64,${imageData}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Tool result image" />
+                            <img src="data:${mediaType};base64,${imageData}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Tool result image" />
                         </div>`;
                     }
                 } else if (typeof contentItem === 'object' && contentItem.type === 'text') {
@@ -544,13 +548,15 @@ function formatAnyContent(content) {
     if (content && typeof content === 'object') {
         // Check if object contains image data
         if (content.type === 'image' && content.data) {
-            return `<img src="data:image/png;base64,${content.data}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Generated image" />`;
+            const mediaType = content.source?.media_type || 'image/png';
+            return `<img src="data:${mediaType};base64,${content.data}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Generated image" />`;
         }
         // Handle array of content blocks
         if (Array.isArray(content)) {
             return content.map(item => {
                 if (item.type === 'image' && item.data) {
-                    return `<img src="data:image/png;base64,${item.data}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Generated image" />`;
+                    const mediaType = item.source?.media_type || 'image/png';
+                    return `<img src="data:${mediaType};base64,${item.data}" style="max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;" alt="Generated image" />`;
                 } else if (item.type === 'text') {
                     return formatMarkdown(item.text || '');
                 }
