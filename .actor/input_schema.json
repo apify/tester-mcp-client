@@ -45,18 +45,16 @@
             "description": "Select a model to be used for selecting tools and generating text.\n\n- Claude Sonnet 4 - the most intelligent model\n- Claude 3.7 Sonnet - highly intelligent model\n- Claude 3.5 Haiku - a fastest model",
             "editor": "select",
             "enum": [
-                "claude-sonnet-4-20250514",
-                "claude-3-5-haiku-20241022",
+                "claude-sonnet-4-0",
                 "claude-3-7-sonnet-latest",
                 "claude-3-5-haiku-latest"
             ],
             "enumTitles": [
                 "Claude Sonnet 4",
-                "Claude Haiku 3.5",
-                "Claude Sonnet 3.7 (old/deprecated)",
-                "Claude Haiku 3.5 (old/deprecated)"
+                "Claude Sonnet 3.7",
+                "Claude Haiku 3.5"
             ],
-            "default": "claude-sonnet-4-20250514"
+            "default": "claude-sonnet-4-0"
         },
         "llmProviderApiKey": {
             "title": "LLM Provider API key (Anthropic is only supported provider now)",
