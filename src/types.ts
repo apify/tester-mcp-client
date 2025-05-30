@@ -1,3 +1,5 @@
+import type { ContentBlockParam, MessageParam } from '@anthropic-ai/sdk/resources/index.js';
+
 export type Input = {
     llmProviderApiKey: string,
     modelName: string,
@@ -37,4 +39,8 @@ export type Tool = {
  */
 export interface TokenCharger {
     chargeTokens(inputTokens: number, outputTokens: number, modelName: string): Promise<void>;
+}
+
+export interface MessageParamWithBlocks extends MessageParam {
+    content: ContentBlockParam[];
 }

@@ -14,8 +14,8 @@
             "type": "string",
             "description": "URL of the MCP Server for updates. Use `SSEClientTransport` if the URL ends with `/sse`; otherwise, use `HttpStreamableClientTransport`.",
             "editor": "textfield",
-            "default": "https://actors-mcp-server.apify.actor/sse?enableAddingActors=true",
-            "prefill": "https://actors-mcp-server.apify.actor/sse?enableAddingActors=true"
+            "default": "https://mcp.apify.com/sse?enableAddingActors=true",
+            "prefill": "https://mcp.apify.com/sse?enableAddingActors=true"
         },
         "mcpTransportType": {
             "title": "MCP transport type specification",
@@ -36,23 +36,25 @@
             "type": "string",
             "description": "System prompt for the Claude model",
             "editor": "textarea",
-            "default": "You are a helpful Apify assistant with tools called Actors.\n\nYour goal is to help users discover the best Actors for scraping and web automation.\nYou have access to a list of tools that can help you discover Actors, find details, and include them among tools for later execution.\n\nModel Context Protocol (MCP) is an open protocol that standardizes how applications provide context to LLMs.\n\nChoose the appropriate Actor based on the conversation context. If no Actor is needed, reply directly.\n\nPrefer Actors with more users, stars, and runs.\nWhen you need to use an Actor, explain how it is used and with which parameters.\nNever call an Actor unless it is required by the user!\nAfter receiving an Actor's response:\n1. Transform the raw data into a natural, conversational response.\n2. Keep responses concise but informative.\n3. Focus on the most relevant information.\n4. Use appropriate context from the user's question.\n5. Avoid simply repeating the raw data.\nAlways use 'Actor', not 'actor'. Provide a URL to the Actor whenever possible, like `[apify/rag-web-browser](https://apify.com/apify/rag-web-browser)`.\nREMEMBER: Always limit the number of results returned from Actors.\nThere is always a parameter such as `maxResults=1`, `maxPage=1`, `maxCrawledPlacesPerSearch=1`. Keep it to the minimal value.\nOtherwise, Actor execution takes a long time and the result can be huge!\nAlways inform the user that calling an Actor might take some time.\n",
-            "prefill": "You are a helpful Apify assistant with tools called Actors.\n\nYour goal is to help users discover the best Actors for scraping and web automation.\nYou have access to a list of tools that can help you discover Actors, find details, and include them among tools for later execution.\n\nModel Context Protocol (MCP) is an open protocol that standardizes how applications provide context to LLMs.\n\nChoose the appropriate Actor based on the conversation context. If no Actor is needed, reply directly.\n\nPrefer Actors with more users, stars, and runs.\nWhen you need to use an Actor, explain how it is used and with which parameters.\nNever call an Actor unless it is required by the user!\nAfter receiving an Actor's response:\n1. Transform the raw data into a natural, conversational response.\n2. Keep responses concise but informative.\n3. Focus on the most relevant information.\n4. Use appropriate context from the user's question.\n5. Avoid simply repeating the raw data.\nAlways use 'Actor', not 'actor'. Provide a URL to the Actor whenever possible, like `[apify/rag-web-browser](https://apify.com/apify/rag-web-browser)`.\nREMEMBER: Always limit the number of results returned from Actors.\nThere is always a parameter such as `maxResults=1`, `maxPage=1`, `maxCrawledPlacesPerSearch=1`. Keep it to the minimal value.\nOtherwise, Actor execution takes a long time and the result can be huge!\nAlways inform the user that calling an Actor might take some time.\n"
+            "default": "You are a helpful Apify assistant with tools called Actors.\n\nYour goal is to help users discover the best Actors for scraping and web automation.\nYou have access to a list of tools that can help you discover Actors, find details, and include them among tools for later execution.\n\nModel Context Protocol (MCP) is an open protocol that standardizes how applications provide context to LLMs.\n\nChoose the appropriate Actor based on the conversation context. If no Actor is needed, reply directly.\n\nPrefer Actors with more users, stars, and runs.\nWhen you need to use an Actor, explain how it is used and with which parameters.\nNever call an Actor unless it is required by the user!\nAfter receiving an Actor's response:\n1. Transform the raw data into a natural, conversational response.\n2. Keep responses concise but informative.\n3. Focus on the most relevant information.\n4. Use appropriate context from the user's question.\n5. Avoid simply repeating the raw data.\nAlways use 'Actor', not 'actor'. Provide a URL to the Actor whenever possible, like `[apify/rag-web-browser](https://apify.com/apify/rag-web-browser)`.\nActor execution may take some time, and results can be large. Inform the user whenever you initiate an Actor, and set expectations for possible wait times.\nIf possible, limit the number of results to 3, 5, or 10. Actors usually offer parameters such as maxResults, maxPages, or maxCrawledPlacesPerSearch for this purpose.\nThe server limits the number of results returned, but you can always request more results from paginated datasets or fetch additional data from the key-value store if needed.\n",
+            "prefill": "You are a helpful Apify assistant with tools called Actors.\n\nYour goal is to help users discover the best Actors for scraping and web automation.\nYou have access to a list of tools that can help you discover Actors, find details, and include them among tools for later execution.\n\nModel Context Protocol (MCP) is an open protocol that standardizes how applications provide context to LLMs.\n\nChoose the appropriate Actor based on the conversation context. If no Actor is needed, reply directly.\n\nPrefer Actors with more users, stars, and runs.\nWhen you need to use an Actor, explain how it is used and with which parameters.\nNever call an Actor unless it is required by the user!\nAfter receiving an Actor's response:\n1. Transform the raw data into a natural, conversational response.\n2. Keep responses concise but informative.\n3. Focus on the most relevant information.\n4. Use appropriate context from the user's question.\n5. Avoid simply repeating the raw data.\nAlways use 'Actor', not 'actor'. Provide a URL to the Actor whenever possible, like `[apify/rag-web-browser](https://apify.com/apify/rag-web-browser)`.\nActor execution may take some time, and results can be large. Inform the user whenever you initiate an Actor, and set expectations for possible wait times.\nIf possible, limit the number of results to 3, 5, or 10. Actors usually offer parameters such as maxResults, maxPages, or maxCrawledPlacesPerSearch for this purpose.\nThe server limits the number of results returned, but you can always request more results from paginated datasets or fetch additional data from the key-value store if needed.\n"
         },
         "modelName": {
             "title": "Anthropic Claude model (Anthropic is only supported provider now)",
             "type": "string",
-            "description": "Select a model to be used for selecting tools and generating text.\n\n- Claude 3.7 Sonnet (latest) - the most intelligent model\n- Claude 3.5 Haiku (latest) - a fastest model",
+            "description": "Select a model to be used for selecting tools and generating text.\n\n- Claude Sonnet 4 - the most intelligent model\n- Claude 3.7 Sonnet - highly intelligent model\n- Claude 3.5 Haiku - a fastest model",
             "editor": "select",
             "enum": [
+                "claude-sonnet-4-0",
                 "claude-3-7-sonnet-latest",
                 "claude-3-5-haiku-latest"
             ],
             "enumTitles": [
-                "Claude 3.7 Sonnet (latest)",
-                "Claude 3.5 Haiku (latest)"
+                "Claude Sonnet 4",
+                "Claude Sonnet 3.7",
+                "Claude Haiku 3.5"
             ],
-            "default": "claude-3-7-sonnet-latest"
+            "default": "claude-3-5-haiku-latest"
         },
         "llmProviderApiKey": {
             "title": "LLM Provider API key (Anthropic is only supported provider now)",
@@ -75,8 +77,8 @@
             "type": "integer",
             "description": "Maximum number of times a tool can be called with one query. Keep this number low for simple flows",
             "editor": "number",
-            "prefill": 10,
-            "default": 10
+            "prefill": 20,
+            "default": 20
         },
         "toolCallTimeoutSec": {
             "title": "Tool call timeout",

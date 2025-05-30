@@ -16,16 +16,16 @@ Navigate to https://...apify.net to interact with chat-ui interface.
 
 ## 🚀 Main features
 
-- 🔌 Connects to an MCP server using Server-Sent Events (SSE)
+- 🔌 Connects to an MCP server using Server-Sent Events (SSE) or Streamable HTTP
 - 💬 Provides a chat-like UI for displaying tool calls and results
-- 🇦 Connects to an [Apify MCP Server](https://apify.com/apify/actors-mcp-server) for interacting with one or more Apify Actors
+- 🇦 Connects to an [Apify MCP Server](https://mcp.apify.com) for interacting with one or more Apify Actors
 - 💥 Dynamically uses tools based on context and user queries (if supported by a server)
 - 🔓 Use Authorization headers and API keys for secure connections
 - 🪟 Open source, so you can review it, suggest improvements, or modify it
 
 ## 🎯 What does Tester MCP Client do?
 
-When connected to [Actors-MCP-Server](https://apify.com/apify/actors-mcp-server) the Tester MCP Client provides an interactive chat interface where you can:
+When connected to [Apify MCP Server](https://mcp.apify.com/) the Tester MCP Client provides an interactive chat interface where you can:
 
 - "What are the most popular Actors for social media scraping?"
 - "Show me the best way to use the Instagram Scraper"
@@ -47,7 +47,7 @@ The Apify MCP Client connects to a running MCP server over Server-Sent Events (S
 ## ⚙️ Usage
 
 - Test any MCP server over SSE
-- Test [Apify Actors MCP Server](https://apify.com/apify/actors-mcp-server) and ability to dynamically select amongst 3000+ tools
+- Test [Apify MCP Server](https://mcp.apify.com/) and the ability to dynamically select amongst thousands of tools
 
 ### Normal Mode (on Apify)
 
@@ -59,10 +59,6 @@ The URL will look like this and will be different from run to run:
 ```shell
 INFO  Navigate to https://......runs.apify.net in your browser to interact with an MCP server.
 ```
-
-### Standby Mode (on Apify)
-
-In progress 🚧
 
 ## 💰 Pricing
 
@@ -135,12 +131,13 @@ Navigate to [http://localhost:3000](http://localhost:3000) in your browser to in
 ## ⓘ Limitations and feedback
 
 The client does not support all MCP features, such as Prompts and Resource.
-Also, it does not store the conversation, so refreshing the page will clear the chat history.
 
 ## References
 
 - [Model Context Protocol](https://modelcontextprotocol.org/)
 - [Apify Actors MCP Server](https://apify.com/apify/actors-mcp-server)
+- [Apify MCP Server](https://docs.apify.com/platform/integrations/mcp)
 - [Pay-per-event pricing model](https://docs.apify.com/sdk/js/docs/guides/pay-per-event)
 - [What are AI Agents?](https://blog.apify.com/what-are-ai-agents/)
 - [What is MCP and why does it matter?](https://blog.apify.com/what-is-model-context-protocol/)
+- [How to use MCP with Apify Actors](https://blog.apify.com/how-to-use-mcp/)
