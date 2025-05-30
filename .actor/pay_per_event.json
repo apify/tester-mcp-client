@@ -9,6 +9,16 @@
         "eventDescription": "Cost per running time for each 5 minutes.",
         "eventPriceUsd":0.005
     },
+    "input-tokens-sonnet-4": {
+        "eventTitle": "100 input tokens (Sonnet-4)",
+        "eventDescription": "Cost per 100 input tokens for Claude 4 Sonnet (1M tokens = 3$).",
+        "eventPriceUsd": 0.0003
+    },
+    "output-tokens-sonnet-4": {
+        "eventTitle": "100 output tokens (Sonnet-4)",
+        "eventDescription": "Cost per 100 output tokens for Claude 4 Sonnet (1M tokens = 15$).",
+        "eventPriceUsd": 0.0015
+    },
     "input-tokens-sonnet-3-7": {
         "eventTitle": "100 input tokens (Sonnet-3.7)",
         "eventDescription": "Cost per 100 input tokens for Claude 3.7 Sonnet (1M tokens = 3$).",

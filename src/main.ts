@@ -25,6 +25,7 @@ import { Counter } from './counter.js';
 import { processInput, getChargeForTokens } from './input.js';
 import { log } from './logger.js';
 import type { TokenCharger, Input } from './types.js';
+import inputSchema from '../.actor/input_schema.json' with { type: 'json' };
 
 await Actor.init();
 
@@ -34,12 +35,26 @@ await Actor.init();
  */
 export class ActorTokenCharger implements TokenCharger {
     async chargeTokens(inputTokens: number, outputTokens: number, modelName: string): Promise<void> {
-        const eventNameInput = modelName === 'claude-3-5-haiku-latest'
-            ? Event.INPUT_TOKENS_HAIKU_3_5
-            : Event.INPUT_TOKENS_SONNET_3_7;
-        const eventNameOutput = modelName === 'claude-3-5-haiku-latest'
-            ? Event.OUTPUT_TOKENS_HAIKU_3_5
-            : Event.OUTPUT_TOKENS_SONNET_3_7;
+        let eventNameInput: string;
+        let eventNameOutput: string;
+        switch (modelName) {
+            case 'claude-3-5-haiku-latest':
+                eventNameInput = Event.INPUT_TOKENS_HAIKU_3_5;
+                eventNameOutput = Event.OUTPUT_TOKENS_HAIKU_3_5;
+                break;
+            case 'claude-3-7-sonnet-latest':
+                eventNameInput = Event.INPUT_TOKENS_SONNET_3_7;
+                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_3_7;
+                break;
+            case 'claude-sonnet-4-0':
+                eventNameInput = Event.INPUT_TOKENS_SONNET_4;
+                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
+                break;
+            default:
+                eventNameInput = Event.INPUT_TOKENS_SONNET_4;
+                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
+                break;
+        }
         try {
             await Actor.charge({ eventName: eventNameInput, count: Math.ceil(inputTokens / 100) });
             await Actor.charge({ eventName: eventNameOutput, count: Math.ceil(outputTokens / 100) });
@@ -195,7 +210,9 @@ app.get('/sse', async (req, res) => {
  * @returns Client instance or throws error
  */
 async function getOrCreateClient(): Promise<Client> {
+    log.debug('Getting or creating MCP client');
     if (!client) {
+        log.debug('Creating new MCP client');
         try {
             client = await createClient(
                 runtimeSettings.mcpUrl,
@@ -250,7 +267,6 @@ app.post('/message', async (req, res) => {
         await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
         log.info(`Charged query answered event`);
 
-        await cleanupClient();
         // Send a finished flag
         await broadcastSSE({ role: 'system', content: '', finished: true });
         return res.json({ ok: true });
@@ -274,8 +290,6 @@ app.get('/reconnect-mcp-server', async (_req, res) => {
     } catch (err) {
         const error = err as Error;
         return res.json({ ok: false, error: error.message });
-    } finally {
-        await cleanupClient();
     }
 });
 
@@ -334,8 +348,6 @@ app.get('/available-tools', async (_req, res) => {
         const error = err as Error;
         log.error(`Error fetching tools: ${error.message}`);
         return res.status(500).json({ error: 'Failed to fetch tools' });
-    } finally {
-        await cleanupClient();
     }
 });
 
@@ -344,6 +356,18 @@ app.get('/available-tools', async (_req, res) => {
  */
 app.get('/settings', (_req, res) => {
     res.json(runtimeSettings);
+});
+
+/**
+ * GET /schema/models endpoint to retrieve available model options from input schema
+ */
+app.get('/schema/models', (_req, res) => {
+    const { enum: models, enumTitles } = inputSchema.properties.modelName;
+    const modelOptions = models.map((model: string, index: number) => ({
+        value: model,
+        label: enumTitles[index],
+    }));
+    res.json(modelOptions);
 });
 
 /**
@@ -456,4 +480,11 @@ app.listen(PORT, async () => {
     log.info(`Serving from ${path.join(publicPath, 'index.html')}`);
     const msg = `Navigate to ${publicUrl} to interact with the chat UI.`;
     await Actor.setStatusMessage(msg);
+});
+
+// Fix Ctrl+C for npm run start
+process.on('SIGINT', async () => {
+    log.info('Received SIGINT. Cleaning up and exiting...');
+    await cleanupClient();
+    await Actor.exit('SIGINT received');
 });
