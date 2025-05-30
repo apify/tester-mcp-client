@@ -548,8 +548,8 @@ function formatAnyContent(content) {
         } catch {
             // Looks like truncated JSON
             const trimmed = content.trim();
-            if ((trimmed.startsWith('{') || trimmed.startsWith('[')) && 
-                (trimmed.includes('"') || trimmed.includes(':'))) {
+            if ((trimmed.startsWith('{') || trimmed.startsWith('['))
+                && (trimmed.includes('"') || trimmed.includes(':'))) {
                 return `<pre>${escapeHTML(formatLikeJSON(trimmed))}</pre>`;
             }
             // fallback to markdown
@@ -587,11 +587,11 @@ function formatLikeJSON(str) {
     let result = '';
     let inString = false;
     let escaped = false;
-    
+
     for (let i = 0; i < str.length; i++) {
         const char = str[i];
         const nextChar = str[i + 1];
-        
+
         if (!inString) {
             if (char === '"' && !escaped) {
                 inString = true;
@@ -599,39 +599,37 @@ function formatLikeJSON(str) {
                 result += char;
                 indentLevel++;
                 if (nextChar && nextChar !== '}' && nextChar !== ']') {
-                    result += '\n' + '  '.repeat(indentLevel);
+                    result += `\n${'  '.repeat(indentLevel)}`;
                 }
                 continue;
             } else if (char === '}' || char === ']') {
                 if (result[result.length - 1] !== '\n') {
-                    result += '\n' + '  '.repeat(indentLevel - 1);
+                    result += `\n${'  '.repeat(indentLevel - 1)}`;
                 } else {
-                    result = result.trimEnd() + '\n' + '  '.repeat(indentLevel - 1);
+                    result = `${result.trimEnd()}\n${'  '.repeat(indentLevel - 1)}`;
                 }
                 indentLevel--;
                 result += char;
                 if (nextChar && nextChar === ',' && str[i + 2]) {
-                    result += ',\n' + '  '.repeat(indentLevel);
+                    result += `,\n${'  '.repeat(indentLevel)}`;
                     i++; // skip the comma
                 }
                 continue;
             } else if (char === ',' && !inString) {
-                result += char + '\n' + '  '.repeat(indentLevel);
+                result += `${char}\n${'  '.repeat(indentLevel)}`;
                 continue;
             } else if (char === ':' && !inString) {
-                result += char + ' ';
+                result += `${char} `;
                 continue;
             }
-        } else {
-            if (char === '"' && !escaped) {
-                inString = false;
-            }
+        } else if (char === '"' && !escaped) {
+            inString = false;
         }
-        
+
         escaped = (char === '\\' && !escaped);
         result += char;
     }
-    
+
     return result;
 }
 
