@@ -472,12 +472,12 @@ function appendToolBlock(item, key) {
     } else if (item.type === 'tool_result') {
         let resultContent = '<em>No content</em>';
         let statusClass = 'success';
-        let statusIcon = 'fa-check-circle';
+        let statusIcon = '✅';
         let statusText = 'Success';
 
         if (item.is_error) {
             statusClass = 'error';
-            statusIcon = 'fa-exclamation-circle';
+            statusIcon = '❌';
             statusText = 'Error';
         }
 
@@ -509,15 +509,21 @@ function appendToolBlock(item, key) {
         } else {
             resultContent = formatAnyContent(item.content);
         }
+        
+        const contentLength = typeof item.content === 'string'
+            ? item.content.length
+            : JSON.stringify(item.content || '').length;
+
         container.innerHTML = `
 <details class="tool-details">
     <summary>
         <div class="tool-header">
-            <div class="tool-icon ${statusClass}">
-                <i class="fas ${statusIcon}"></i>
+            <div class="tool-icon ${statusClass}" style="background-color: ${statusClass === 'success' ? '#d4edda' : '#f8d7da'}; border-radius: 4px; padding: 4px;">
+                <span style="font-size: 1.2em;">${statusIcon}</span>
             </div>
             <div class="tool-info">
                 <div class="tool-call">Tool result: ${statusText}</div>
+                <div class="tool-meta">${contentLength} chars</div>
             </div>
             <div class="tool-status">
                 <i class="fas fa-chevron-down"></i>
