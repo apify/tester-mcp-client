@@ -131,7 +131,6 @@ Navigate to [http://localhost:3000](http://localhost:3000) in your browser to in
 ## ⓘ Limitations and feedback
 
 The client does not support all MCP features, such as Prompts and Resource.
-Also, it does not store the conversation, so refreshing the page will clear the chat history.
 
 ## References
 
