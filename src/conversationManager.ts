@@ -6,7 +6,7 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 import type { ContentBlockParam, Message, MessageParam, TextBlockParam, ImageBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import type { ListToolsResult, Notification } from '@modelcontextprotocol/sdk/types.js';
+import type { ListToolsResult, Notification, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
@@ -448,83 +448,14 @@ export class ConversationManager {
             };
             try {
                 const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
-
-                // Enhanced content processing for images and mixed content
-                if (results.content instanceof Array && results.content.length !== 0) {
-                    const processedContent: (TextBlockParam | ImageBlockParam)[] = [];
-                    processedContent.push({
-                        type: 'text',
-                        text: `Tool "${params.name}" executed successfully. Results:`,
-                    });
-
-                    for (const item of results.content) {
-                        if (item.type === 'image' && item.data) {
-                            // Detect image format from base64 data
-                            const imageData = item.data;
-                            let mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' = 'image/png';
-
-                            try {
-                                // Check the base64 data signature to determine format
-                                const header = imageData.substring(0, 20);
-
-                                // JPEG signatures
-                                if (header.startsWith('/9j/') || header.startsWith('iVBORw0KGgo')) {
-                                    if (header.startsWith('/9j/')) {
-                                        mediaType = 'image/jpeg';
-                                    } else if (header.startsWith('iVBORw0KGgo')) {
-                                        mediaType = 'image/png';
-                                    }
-                                } else {
-                                    // Try to decode and check binary signature
-                                    const binaryString = atob(imageData.substring(0, 20));
-                                    const bytes = new Uint8Array(binaryString.length);
-                                    for (let i = 0; i < binaryString.length; i++) {
-                                        bytes[i] = binaryString.charCodeAt(i);
-                                    }
-
-                                    // PNG signature: 89 50 4E 47 0D 0A 1A 0A
-                                    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
-                                        mediaType = 'image/png';
-                                    } else if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
-                                        mediaType = 'image/jpeg';
-                                    } else if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
-                                        mediaType = 'image/webp';
-                                    }
-                                }
-                            } catch (error) {
-                                log.warning(`Could not detect image format, using default PNG: ${error}`);
-                                mediaType = 'image/png';
-                            }
-
-                            log.debug(`Detected image format: ${mediaType}`);
-                            processedContent.push({
-                                type: 'image',
-                                source: {
-                                    type: 'base64',
-                                    media_type: mediaType,
-                                    data: imageData,
-                                },
-                            });
-                        } else if (item.type === 'text' && item.text) {
-                            processedContent.push({
-                                type: 'text',
-                                text: item.text,
-                            });
-                        } else if (item.data) {
-                            processedContent.push({
-                                type: 'text',
-                                text: typeof item.data === 'string' ? item.data : JSON.stringify(item.data, null, 2),
-                            });
-                        }
-                    }
-
-                    toolResultBlock.content = processedContent;
+                if (results && typeof results === 'object' && 'content' in results) {
+                    toolResultBlock.content = this.processToolResults(results as CallToolResult, params.name);
                 } else {
+                    log.warning(`Tool ${params.name} returned unexpected result format:`, results);
                     toolResultBlock.content = [{
                         type: 'text',
-                        text: `No results retrieved from ${params.name}`,
+                        text: `Tool "${params.name}" returned unexpected result format: ${JSON.stringify(results, null, 2)}`,
                     }];
-                    toolResultBlock.is_error = true;
                 }
             } catch (error) {
                 log.error(`Error when calling tool ${params.name}: ${error}`);
@@ -578,5 +509,87 @@ export class ConversationManager {
         // Implement logic to handle the notification
         log.info(`Handling notification: ${JSON.stringify(notification)}`);
         // You can update the conversation or perform other actions based on the notification
+    }
+
+    /**
+     * Process tool call results and convert them into appropriate content blocks
+     */
+    private processToolResults(results: CallToolResult, toolName: string): (TextBlockParam | ImageBlockParam)[] {
+        if (!results.content || !Array.isArray(results.content) || results.content.length === 0) {
+            return [{
+                type: 'text',
+                text: `No results retrieved from ${toolName}`,
+            }];
+        }
+        const processedContent: (TextBlockParam | ImageBlockParam)[] = [];
+        processedContent.push({
+            type: 'text',
+            text: `Tool "${toolName}" executed successfully. Results:`,
+        });
+        for (const item of results.content) {
+            if (item.type === 'image' && item.data) {
+                const mediaType = this.detectImageFormat(item.data);
+                log.debug(`Detected image format: ${mediaType}`);
+                processedContent.push({
+                    type: 'image',
+                    source: {
+                        type: 'base64',
+                        media_type: mediaType,
+                        data: item.data,
+                    },
+                });
+                continue;
+            }
+            if (item.type === 'text' && item.text) {
+                processedContent.push({
+                    type: 'text',
+                    text: item.text,
+                });
+                continue;
+            }
+            // Other data types
+            if (item.data) {
+                processedContent.push({
+                    type: 'text',
+                    text: typeof item.data === 'string' ? item.data : JSON.stringify(item.data, null, 2),
+                });
+            }
+        }
+        return processedContent;
+    }
+
+    /**
+     * Detect image format from base64 data
+     */
+    private detectImageFormat(imageData: string): 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' {
+        try {
+            const header = imageData.substring(0, 20);
+            if (header.startsWith('/9j/')) {
+                return 'image/jpeg';
+            }
+            if (header.startsWith('iVBORw0KGgo')) {
+                return 'image/png';
+            }
+            // Binary signature detection
+            const binaryString = atob(imageData.substring(0, 20));
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+            if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+                return 'image/png';
+            }
+            if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+                return 'image/jpeg';
+            }
+            if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+                return 'image/webp';
+            }
+            return 'image/png'; // Default fallback
+        } catch (error) {
+            log.warning(`Could not detect image format, using default PNG: ${error}`);
+            return 'image/png';
+        }
     }
 }

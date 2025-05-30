@@ -509,7 +509,7 @@ function appendToolBlock(item, key) {
         } else {
             resultContent = formatAnyContent(item.content);
         }
-        
+
         const contentLength = typeof item.content === 'string'
             ? item.content.length
             : JSON.stringify(item.content || '').length;
