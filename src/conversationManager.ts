@@ -448,7 +448,7 @@ export class ConversationManager {
             };
             try {
                 const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
-                
+
                 // Enhanced content processing for images and mixed content
                 if (results.content instanceof Array && results.content.length !== 0) {
                     const processedContent: (TextBlockParam | ImageBlockParam)[] = [];
@@ -456,13 +456,13 @@ export class ConversationManager {
                         type: 'text',
                         text: `Tool "${params.name}" executed successfully. Results:`,
                     });
-                    
+
                     for (const item of results.content) {
                         if (item.type === 'image' && item.data) {
                             // Detect image format from base64 data
                             const imageData = item.data;
                             let mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' = 'image/png';
-                            
+
                             try {
                                 // Check the base64 data signature to determine format
                                 const header = imageData.substring(0, 20);
@@ -517,7 +517,7 @@ export class ConversationManager {
                             });
                         }
                     }
-                    
+
                     toolResultBlock.content = processedContent;
                 } else {
                     toolResultBlock.content = [{
