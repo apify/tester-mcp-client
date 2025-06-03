@@ -471,14 +471,19 @@ function appendToolBlock(item, key) {
 </details>`;
     } else if (item.type === 'tool_result') {
         let resultContent = '<em>No content</em>';
-        let statusClass = 'success';
-        let statusIcon = '✅';
-        let statusText = 'Success';
+        let statusText;
+        let iconHtml;
 
         if (item.is_error) {
-            statusClass = 'error';
-            statusIcon = '❌';
             statusText = 'Error';
+            iconHtml = `<div class="tool-icon error" style="background-color: #f8d7da; border-radius: 4px; padding: 4px;">
+                <span style="font-size: 1.2em;">❌</span>
+            </div>`;
+        } else {
+            statusText = 'Success';
+            iconHtml = `<div class="tool-icon">
+                <i class="fas fa-file-alt"></i>
+            </div>`;
         }
 
         if (Array.isArray(item.content)) {
@@ -518,9 +523,7 @@ function appendToolBlock(item, key) {
 <details class="tool-details">
     <summary>
         <div class="tool-header">
-            <div class="tool-icon ${statusClass}" style="background-color: ${statusClass === 'success' ? '#d4edda' : '#f8d7da'}; border-radius: 4px; padding: 4px;">
-                <span style="font-size: 1.2em;">${statusIcon}</span>
-            </div>
+            ${iconHtml}
             <div class="tool-info">
                 <div class="tool-call">Tool result: ${statusText}</div>
                 <div class="tool-meta">${contentLength} chars</div>
