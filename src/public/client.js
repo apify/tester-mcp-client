@@ -590,7 +590,8 @@ function formatLikeJSON(str) {
 
     for (let i = 0; i < str.length; i++) {
         const char = str[i];
-        const nextChar = str[i + 1];
+        const nextChar = str[i + 1] || '';
+        const nextNextChar = str[i + 2] || '';
 
         if (!inString) {
             if (char === '"' && !escaped) {
@@ -604,13 +605,13 @@ function formatLikeJSON(str) {
                 continue;
             } else if (char === '}' || char === ']') {
                 if (result[result.length - 1] !== '\n') {
-                    result += `\n${'  '.repeat(indentLevel - 1)}`;
+                    result += `\n${'  '.repeat(Math.max(0, indentLevel - 1))}`;
                 } else {
-                    result = `${result.trimEnd()}\n${'  '.repeat(indentLevel - 1)}`;
+                    result = `${result.trimEnd()}\n${'  '.repeat(Math.max(0, indentLevel - 1))}`;
                 }
-                indentLevel--;
+                indentLevel = Math.max(0, indentLevel - 1);
                 result += char;
-                if (nextChar && nextChar === ',' && str[i + 2]) {
+                if (nextChar === ',' && nextNextChar) {
                     result += `,\n${'  '.repeat(indentLevel)}`;
                     i++; // skip the comma
                 }
