@@ -558,6 +558,16 @@ function appendToolBlock(item, key) {
 }
 
 // ================== UTILITY FOR FORMATTING CONTENT (JSON, MD, ETC.) ==================
+
+/** HTML escaper for <pre> blocks, etc. */
+function escapeHTML(str) {
+    if (typeof str !== 'string') return String(str);
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 function formatAnyContent(content) {
     if (typeof content === 'string') {
         // Check if it's base64 image data
@@ -569,6 +579,13 @@ function formatAnyContent(content) {
             const parsed = JSON.parse(content);
             return `<pre><code>${escapeHTML(JSON.stringify(parsed, null, 2))}</code></pre>`;
         } catch {
+            // Looks like truncated JSON
+            const trimmed = content.trim();
+            if ((trimmed.startsWith('{') || trimmed.startsWith('['))
+                && (trimmed.includes('"') || trimmed.includes(':'))) {
+                return `<pre>${escapeHTML(formatLikeJSON(trimmed))}</pre>`;
+            }
+            // fallback to markdown
             return formatMarkdown(content);
         }
     }
@@ -621,13 +638,57 @@ function formatMarkdown(text) {
     return safe;
 }
 
-/** HTML escaper for <pre> blocks, etc. */
-function escapeHTML(str) {
-    if (typeof str !== 'string') return String(str);
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+// Helper function to add basic indentation to JSON-like strings
+function formatLikeJSON(str) {
+    let indentLevel = 0;
+    let result = '';
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        const nextChar = str[i + 1] || '';
+        const nextNextChar = str[i + 2] || '';
+
+        if (!inString) {
+            if (char === '"' && !escaped) {
+                inString = true;
+            } else if (char === '{' || char === '[') {
+                result += char;
+                indentLevel++;
+                if (nextChar && nextChar !== '}' && nextChar !== ']') {
+                    result += `\n${'  '.repeat(indentLevel)}`;
+                }
+                continue;
+            } else if (char === '}' || char === ']') {
+                if (result[result.length - 1] !== '\n') {
+                    result += `\n${'  '.repeat(Math.max(0, indentLevel - 1))}`;
+                } else {
+                    result = `${result.trimEnd()}\n${'  '.repeat(Math.max(0, indentLevel - 1))}`;
+                }
+                indentLevel = Math.max(0, indentLevel - 1);
+                result += char;
+                if (nextChar === ',' && nextNextChar) {
+                    result += `,\n${'  '.repeat(indentLevel)}`;
+                    i++; // skip the comma
+                }
+                continue;
+            } else if (char === ',' && !inString) {
+                result += `${char}\n${'  '.repeat(indentLevel)}`;
+                continue;
+            } else if (char === ':' && !inString) {
+                result += `${char} `;
+                continue;
+            }
+        } else if (char === '"' && !escaped) {
+            inString = false;
+        }
+
+        escaped = (char === '\\' && !escaped);
+        result += char;
+    }
+
+    return result;
 }
 
 // ================== SENDING A USER QUERY (POST /message) ==================
