@@ -476,8 +476,8 @@ function appendToolBlock(item, key) {
 
         if (item.is_error) {
             statusText = 'Error';
-            iconHtml = `<div class="tool-icon error" style="background-color: #f8d7da; border-radius: 4px; padding: 4px;">
-                <span style="font-size: 1.2em;">❌</span>
+            iconHtml = `<div class="tool-icon" style="background-color: #ff3342;">
+                <i class="fas fa-file-alt"></i>
             </div>`;
         } else {
             statusText = 'Success';
