@@ -9,7 +9,7 @@
         "clientUrl": {
             "type": "string",
             "title": "Test MCP Client URL",
-            "template": "{{actorRun.containerUrl}}"
+            "template": "{{run.containerUrl}}"
         }
     }
 }
