@@ -1,0 +1,15 @@
+{
+    "actorOutputSchemaVersion": 1,
+
+    "title": "Tester MCP Client output",
+    "description": "Tester MCP Client outputs no results, but provides interactive webpage to chat with LLM.",
+    "type": "object",
+
+    "properties": {
+        "clientUrl": {
+            "type": "string",
+            "title": "Test MCP Client URL",
+            "template": "{{actorRun.containerUrl}}"
+        }
+    }
+}
