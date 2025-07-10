@@ -8,7 +8,7 @@
     "properties": {
         "clientUrl": {
             "type": "string",
-            "title": "Test MCP Client URL",
+            "title": "MCP Client",
             "template": "{{run.containerUrl}}"
         },
         "chatHistory": {
