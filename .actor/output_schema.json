@@ -2,7 +2,7 @@
     "actorOutputSchemaVersion": 1,
 
     "title": "Tester MCP Client output",
-    "description": "Tester MCP Client outputs no results, but provides interactive webpage to chat with LLM.",
+    "description": "Tester MCP Client provides interactive webpage to chat with LLM and conversation history stored in dataset.",
     "type": "object",
 
     "properties": {
@@ -10,6 +10,11 @@
             "type": "string",
             "title": "Test MCP Client URL",
             "template": "{{run.containerUrl}}"
+        },
+        "chatHistory": {
+            "type": "string",
+            "title": "Conversation history",
+            "template": "{{links.apiDefaultDatasetUrl}}/items"
         }
     }
 }
