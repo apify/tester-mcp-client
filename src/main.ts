@@ -234,7 +234,7 @@ async function getOrCreateClient(): Promise<Client> {
  * Helper function to handle client cleanup based on transport type
  */
 async function cleanupClient(): Promise<void> {
-    if (input.mcpTransportType === 'http-streamable-json-response' && client) {
+    if (input.mcpTransportType === 'http-streamable' && client) {
         try {
             await client.close();
             client = null;
