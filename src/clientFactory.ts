@@ -11,7 +11,7 @@ import type { McpTransportType } from './types.js';
 /**
  * Create a client for the MCP server
  * @param serverUrl - The URL of the MCP server
- * @param mcpTransport - The transport method to use for the MCP server. Either 'sse' or 'http-streamable'
+ * @param mcpTransport - The transport method to use for the MCP server. Either 'sse' or 'http'
  * @param customHeaders - Custom headers to send to the MCP server
  * @param onToolsUpdate - A function to call when the tools list changes. Used to update the tools in the conversation manager
  * @param onNotification - A function to call when a notification is received. Used to log notifications

@@ -51,7 +51,7 @@ The Apify MCP Client connects to a running MCP server over **HTTP streamable** (
 
 Learn about the key features and capabilities in the **Apify MCP Server Tutorial: Integrate 5,000+ Apify Actors and Agents Into Claude** video
 
-[Apify MCP Server Tutorial: Integrate 5,000+ Apify Actors and Agents Into Claude](https://www.youtube.com/watch?v=BKu8H91uCTg&ab_channel=Apify).
+[Apify MCP Server Tutorial: Integrate 5,000+ Apify Actors and Agents Into Claude](https://www.youtube.com/watch?v=BKu8H91uCTg)
 
 ### Normal Mode (on Apify)
 
