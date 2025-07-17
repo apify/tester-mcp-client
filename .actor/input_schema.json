@@ -21,9 +21,9 @@
             "title": "MCP transport type specification",
             "type": "string",
             "description": "This setting helps you to override the MCP transport layer if required. Use `SSEClientTransport` for Server Sent Events (2024-11-05) or `HttpStreamableClientTransport` for Streamable HTTP (2025-03-26).",
-            "enum": ["sse", "http-streamable"],
-            "enumTitles": ["SSE (Server Sent Events, 2024-11-05)", "Streamable HTTP (2025-03-26)"],
-            "default": "http-streamable"
+            "enum": ["http", "sse", "http-streamable-json-response"],
+            "enumTitles": ["Streamable HTTP (2025-03-26)", "SSE (Server Sent Events, 2024-11-05)", "Deprecated"],
+            "default": "http"
         },
         "headers": {
             "title": "HTTP headers",

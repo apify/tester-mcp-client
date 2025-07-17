@@ -17,7 +17,7 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
     // Normalize deprecated transport type before casting
     let { mcpTransportType } = originalInput;
     if (mcpTransportType === 'http-streamable-json-response') {
-        mcpTransportType = 'http-streamable';
+        mcpTransportType = 'http';
     }
 
     const input = { ...defaults, ...originalInput, mcpTransportType } as StandbyInput;
@@ -30,14 +30,14 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
         throw new Error(`MCP Server URL is not provided. ${MISSING_PARAMETER_ERROR}: 'mcpUrl'`);
     }
 
-    if (input.mcpTransportType === 'http-streamable' && input.mcpUrl.includes('/sse')) {
-        throw new Error(`MCP URL includes /sse path, but the transport is set to 'http-streamable'. This is very likely a mistake.`);
+    if (input.mcpTransportType === 'http' && input.mcpUrl.includes('/sse')) {
+        throw new Error(`MCP URL includes /sse path, but the transport is set to 'http'. This is very likely a mistake.`);
     }
 
     if (input.mcpUrl.includes('/sse')) {
         input.mcpTransportType = 'sse';
     } else {
-        input.mcpTransportType = 'http-streamable';
+        input.mcpTransportType = 'http';
     }
 
     if (!input.headers) {

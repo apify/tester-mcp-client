@@ -1,6 +1,9 @@
 import type { ContentBlockParam, MessageParam } from '@anthropic-ai/sdk/resources/index.js';
 
-export type McpTransportType = 'sse' | 'http-streamable' | 'http-streamable-json-response';
+/**
+ * Use 'sse' or 'http' for MCP servers that support SSE.
+ */
+export type McpTransportType = 'sse' | 'http' | 'http-streamable-json-response';
 
 export type Input = {
     llmProviderApiKey: string,
@@ -14,7 +17,7 @@ export type Input = {
     mcpSseUrl: string,
     mcpUrl: string,
     /**
-     * Use 'sse' or 'http-streamable'. 'http-streamable-json-response' is deprecated.
+     * Use 'sse' or 'http'.
      */
     mcpTransportType: McpTransportType,
     systemPrompt: string,
