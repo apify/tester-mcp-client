@@ -4,9 +4,9 @@
     "schemaVersion": 1,
     "properties": {
         "mcpSseUrl": {
-            "title": "MCP Server Sent Events (SSE) URL",
+            "title": "MCP Server URL",
             "type": "string",
-            "description": "MCP Server Sent Events (SSE) URL for receiving updates from the server.\n\nMake sure that URL path ends with `/sse`",
+            "description": "MCP Server URL for receiving updates from the server.",
             "editor": "hidden"
         },
         "mcpUrl": {
@@ -14,16 +14,16 @@
             "type": "string",
             "description": "URL of the MCP Server for updates. Use `SSEClientTransport` if the URL ends with `/sse`; otherwise, use `HttpStreamableClientTransport`.",
             "editor": "textfield",
-            "default": "https://mcp.apify.com/sse?enableAddingActors=true",
-            "prefill": "https://mcp.apify.com/sse?enableAddingActors=true"
+            "default": "https://mcp.apify.com",
+            "prefill": "https://mcp.apify.com"
         },
         "mcpTransportType": {
             "title": "MCP transport type specification",
             "type": "string",
-            "description": "This setting helps you to override the MCP transport layer if required. Use `SSEClientTransport` for Server Sent Events (2024-11-05) or `HttpStreamableClientTransport` for JSON Response Streamable HTTP (2025-03-26).",
-            "enum": ["sse", "http-streamable-json-response"],
-            "enumTitles": ["SSE (Server Sent Events, 2024-11-05)", "JSON Response Streamable HTTP (2025-03-26)"],
-            "default": "sse"
+            "description": "This setting helps you to override the MCP transport layer if required. Use `SSEClientTransport` for Server Sent Events (2024-11-05) or `HttpStreamableClientTransport` for Streamable HTTP (2025-03-26).",
+            "enum": ["sse", "http-streamable"],
+            "enumTitles": ["SSE (Server Sent Events, 2024-11-05)", "Streamable HTTP (2025-03-26)"],
+            "default": "http-streamable"
         },
         "headers": {
             "title": "HTTP headers",

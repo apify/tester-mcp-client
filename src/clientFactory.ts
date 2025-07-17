@@ -6,10 +6,12 @@ import { ToolListChangedNotificationSchema, LoggingMessageNotificationSchema } f
 import type { LoggingMessageNotification, ListToolsResult } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 
+import type { McpTransportType } from './types.js';
+
 /**
  * Create a client for the MCP server
  * @param serverUrl - The URL of the MCP server
- * @param mcpTransport - The transport method to use for the MCP server. Either 'sse' or 'http-streamable-json-response'
+ * @param mcpTransport - The transport method to use for the MCP server. Either 'sse' or 'http-streamable'
  * @param customHeaders - Custom headers to send to the MCP server
  * @param onToolsUpdate - A function to call when the tools list changes. Used to update the tools in the conversation manager
  * @param onNotification - A function to call when a notification is received. Used to log notifications
@@ -17,7 +19,7 @@ import { log } from 'apify';
  */
 export async function createClient(
     serverUrl: string,
-    mcpTransport: 'sse' | 'http-streamable-json-response',
+    mcpTransport: McpTransportType,
     customHeaders: Record<string, string> | null,
     onToolsUpdate: (listTools: ListToolsResult) => Promise<void>,
     onNotification: (notification: LoggingMessageNotification) => void,

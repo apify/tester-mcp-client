@@ -14,7 +14,13 @@ export function getChargeForTokens() {
  * @returns input
  */
 export function processInput(originalInput: Partial<Input> | Partial<StandbyInput>): Input {
-    const input = { ...defaults, ...originalInput } as StandbyInput;
+    // Normalize deprecated transport type before casting
+    let { mcpTransportType } = originalInput;
+    if (mcpTransportType === 'http-streamable-json-response') {
+        mcpTransportType = 'http-streamable';
+    }
+
+    const input = { ...defaults, ...originalInput, mcpTransportType } as StandbyInput;
 
     // MCP SSE URL is deprecated, use MCP URL instead
     if (input.mcpSseUrl && !input.mcpUrl) {
@@ -24,14 +30,14 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
         throw new Error(`MCP Server URL is not provided. ${MISSING_PARAMETER_ERROR}: 'mcpUrl'`);
     }
 
-    if (input.mcpTransportType === 'http-streamable-json-response' && input.mcpUrl.includes('/sse')) {
+    if (input.mcpTransportType === 'http-streamable' && input.mcpUrl.includes('/sse')) {
         throw new Error(`MCP URL includes /sse path, but the transport is set to 'http-streamable'. This is very likely a mistake.`);
     }
 
     if (input.mcpUrl.includes('/sse')) {
         input.mcpTransportType = 'sse';
     } else {
-        input.mcpTransportType = 'http-streamable-json-response';
+        input.mcpTransportType = 'http-streamable';
     }
 
     if (!input.headers) {
