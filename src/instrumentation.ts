@@ -6,7 +6,7 @@ import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
 const COLLECTOR_ENDPOINT = 'https://app.phoenix.arize.com/s/michal-kalita';
-const SERVICE_NAME = 'mc-client';
+const SERVICE_NAME = 'mc-client2';
 
 const provider = new NodeTracerProvider({
     resource: resourceFromAttributes({

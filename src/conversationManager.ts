@@ -5,12 +5,14 @@
 
 import { Anthropic } from '@anthropic-ai/sdk';
 import type { ContentBlockParam, Message, MessageParam, TextBlockParam, ImageBlockParam } from '@anthropic-ai/sdk/resources/messages';
+import { SemanticConventions } from '@arizeai/openinference-semantic-conventions';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { ListToolsResult, Notification, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
+import { tracer } from './instrumentation.js';
 import type { MessageParamWithBlocks, TokenCharger, Tool } from './types.js';
 import { pruneAndFixConversation } from './utils.js';
 
@@ -37,6 +39,7 @@ export class ConversationManager {
     private readonly tokenCharger: TokenCharger | null;
     private tools: Tool[] = [];
     private readonly maxContextTokens: number;
+    private readonly sessionId: string;
 
     constructor(
         systemPrompt: string,
@@ -48,6 +51,7 @@ export class ConversationManager {
         tokenCharger: TokenCharger | null = null,
         persistedConversation: MessageParam[] = [],
         maxContextTokens: number = DEFAULT_MAX_CONTEXT_TOKENS,
+        sessionId: string = crypto.randomUUID(),
     ) {
         this.systemPrompt = systemPrompt;
         this.modelName = modelName;
@@ -58,6 +62,7 @@ export class ConversationManager {
         this.anthropic = new Anthropic({ apiKey });
         this.conversation = [...persistedConversation];
         this.maxContextTokens = Math.floor(maxContextTokens * CONTEXT_TOKEN_SAFETY_MARGIN);
+        this.sessionId = sessionId;
     }
 
     /**
@@ -100,6 +105,10 @@ export class ConversationManager {
 
     resetConversation() {
         this.conversation = [];
+    }
+
+    getSessionId(): string {
+        return this.sessionId;
     }
 
     async handleToolUpdate(listTools: ListToolsResult) {
@@ -296,70 +305,96 @@ export class ConversationManager {
         maxRetries = 3,
         retryDelayMs = 2000, // 2 seconds
     ): Promise<Message> {
-        // Check context window before API call
-        // TODO pruneAndFix could be a class function, I had it there but I had to revert because of images size
-        this.conversation = pruneAndFixConversation(this.conversation);
-        await this.ensureContextWindowLimit();
+        return tracer.startActiveSpan('createMessage', async (span) => {
+            span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'llm');
+            span.setAttribute(SemanticConventions.LLM_MODEL_NAME, this.modelName);
+            span.setAttribute(SemanticConventions.SESSION_ID, this.sessionId);
 
-        let lastError: Error | null = null;
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                log.debug(`Making API call with ${this.conversation.length} messages`);
-                const response = await this.anthropic.messages.create({
-                    model: this.modelName,
-                    max_tokens: this.modelMaxOutputTokens,
-                    messages: this.conversation,
-                    system: this.systemPrompt,
-                    tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
-                });
-                if (this.tokenCharger && response.usage) {
-                    const inputTokens = response.usage.input_tokens ?? 0;
-                    const outputTokens = response.usage.output_tokens ?? 0;
-                    await this.tokenCharger.chargeTokens(inputTokens, outputTokens, this.modelName);
-                }
-                return response;
-            } catch (error) {
-                lastError = error as Error;
-                if (error instanceof Error) {
-                    // Log conversation state for debugging
-                    if (error.message.includes('tool_use_id') || error.message.includes('tool_result') || error.message.includes('at least one message')) {
-                        const conversationDebug = this.conversation.map((msg, index) => ({
-                            index,
-                            role: msg.role,
-                            contentTypes: Array.isArray(msg.content)
-                                ? msg.content.map((block) => block.type)
-                                : 'string',
-                            contentLength: typeof msg.content === 'string' ? msg.content.length : msg.content.length,
-                        }));
+                // Check context window before API call
+                // TODO pruneAndFix could be a class function, I had it there but I had to revert because of images size
+                this.conversation = pruneAndFixConversation(this.conversation);
+                span.setAttribute(SemanticConventions.INPUT_VALUE, JSON.stringify(this.conversation));
 
-                        log.error('Conversation structure error. Current conversation:', {
-                            conversationLength: this.conversation.length,
-                            conversation: conversationDebug,
+                await this.ensureContextWindowLimit();
+
+                let lastError: Error | null = null;
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                        log.debug(`Making API call with ${this.conversation.length} messages`);
+                        const response = await this.anthropic.messages.create({
+                            model: this.modelName,
+                            max_tokens: this.modelMaxOutputTokens,
+                            messages: this.conversation,
+                            system: this.systemPrompt,
+                            tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
                         });
-                    }
-                    if (error.message.includes('429') || error.message.includes('529')) {
-                        if (attempt < maxRetries) {
-                            const delay = attempt * retryDelayMs;
-                            const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
-                            log.debug(`${errorType} hit, attempt ${attempt}/${maxRetries}. Retrying in ${delay / 1000} seconds...`);
-                            await new Promise<void>((resolve) => {
-                                setTimeout(() => resolve(), delay);
-                            });
-                            continue;
-                        } else {
-                            const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
-                            const errorMsg = errorType === 'Rate limit'
-                                ? `Rate limit exceeded after ${maxRetries} attempts. Please try again in a few minutes or consider switching to a different model`
-                                : 'Server is currently experiencing high load. Please try again in a few moments or consider switching to a different model.';
-                            throw new Error(errorMsg);
+                        if (this.tokenCharger && response.usage) {
+                            const inputTokens = response.usage.input_tokens ?? 0;
+                            const outputTokens = response.usage.output_tokens ?? 0;
+                            await this.tokenCharger.chargeTokens(inputTokens, outputTokens, this.modelName);
                         }
+
+                        span.setAttribute(SemanticConventions.LLM_TOKEN_COUNT_PROMPT, response.usage?.input_tokens ?? 0);
+                        span.setAttribute(SemanticConventions.LLM_TOKEN_COUNT_COMPLETION, response.usage?.output_tokens ?? 0);
+                        span.setAttribute(SemanticConventions.OUTPUT_VALUE, JSON.stringify(response.content));
+                        span.setStatus({ code: 1 }); // SUCCESS
+
+                        return response;
+                    } catch (error) {
+                        lastError = error as Error;
+                        if (error instanceof Error) {
+                            // Log conversation state for debugging
+                            const hasStructureError = error.message.includes('tool_use_id')
+                                || error.message.includes('tool_result')
+                                || error.message.includes('at least one message');
+                            if (hasStructureError) {
+                                const conversationDebug = this.conversation.map((msg, index) => ({
+                                    index,
+                                    role: msg.role,
+                                    contentTypes: Array.isArray(msg.content)
+                                        ? msg.content.map((block) => block.type)
+                                        : 'string',
+                                    contentLength: typeof msg.content === 'string' ? msg.content.length : msg.content.length,
+                                }));
+
+                                log.error('Conversation structure error. Current conversation:', {
+                                    conversationLength: this.conversation.length,
+                                    conversation: conversationDebug,
+                                });
+                            }
+                            if (error.message.includes('429') || error.message.includes('529')) {
+                                if (attempt < maxRetries) {
+                                    const delay = attempt * retryDelayMs;
+                                    const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
+                                    log.debug(`${errorType} hit, attempt ${attempt}/${maxRetries}. Retrying in ${delay / 1000} seconds...`);
+                                    await new Promise<void>((resolve) => {
+                                        setTimeout(() => resolve(), delay);
+                                    });
+                                    continue;
+                                } else {
+                                    const errorType = error.message.includes('429') ? 'Rate limit' : 'Server overload';
+                                    const errorMsg = errorType === 'Rate limit'
+                                        ? `Rate limit exceeded after ${maxRetries} attempts. Please try again in a few minutes or consider switching to a different model`
+                                        : 'Server is currently experiencing high load. Please try again in a few moments '
+                                          + 'or consider switching to a different model.';
+                                    throw new Error(errorMsg);
+                                }
+                            }
+                        }
+                        // For other errors, throw immediately
+                        throw error;
                     }
                 }
-                // For other errors, throw immediately
+                throw lastError ?? new Error('Unknown error after retries in createMessageWithRetry');
+            } catch (error) {
+                span.recordException(error as Error);
+                span.setStatus({ code: 2, message: error instanceof Error ? error.message : String(error) }); // ERROR
                 throw error;
+            } finally {
+                span.end();
             }
-        }
-        throw lastError ?? new Error('Unknown error after retries in createMessageWithRetry');
+        });
     }
 
     /**
@@ -446,25 +481,42 @@ export class ConversationManager {
                 content: [],
                 is_error: false,
             };
-            try {
-                const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
-                if (results && typeof results === 'object' && 'content' in results) {
-                    toolResultBlock.content = this.processToolResults(results as CallToolResult, params.name);
-                } else {
-                    log.warning(`Tool ${params.name} returned unexpected result format:`, results);
+
+            await tracer.startActiveSpan('toolCall', async (span) => {
+                span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'tool');
+                span.setAttribute(SemanticConventions.TOOL_NAME, params.name);
+                span.setAttribute(SemanticConventions.TOOL_PARAMETERS, JSON.stringify(params.arguments));
+                span.setAttribute(SemanticConventions.SESSION_ID, this.sessionId);
+                span.setAttribute('toolCallCount', toolCallCountRound);
+                span.setAttribute('timeout', this.toolCallTimeoutSec);
+
+                try {
+                    const results = await client.callTool(params, CallToolResultSchema, { timeout: this.toolCallTimeoutSec * 1000 });
+                    if (results && typeof results === 'object' && 'content' in results) {
+                        toolResultBlock.content = this.processToolResults(results as CallToolResult, params.name);
+                    } else {
+                        log.warning(`Tool ${params.name} returned unexpected result format:`, results);
+                        toolResultBlock.content = [{
+                            type: 'text',
+                            text: `Tool "${params.name}" returned unexpected result format: ${JSON.stringify(results, null, 2)}`,
+                        }];
+                    }
+                    // span.setAttribute(SemanticConventions.OUTPUT_MIME_TYPE, toolResultBlock.type); // This breaks Phoenix UI
+                    span.setAttribute(SemanticConventions.OUTPUT_VALUE, JSON.stringify(toolResultBlock.content));
+                    span.setStatus({ code: 1 }); // SUCCESS
+                } catch (error) {
+                    log.error(`Error when calling tool ${params.name}: ${error}`);
                     toolResultBlock.content = [{
                         type: 'text',
-                        text: `Tool "${params.name}" returned unexpected result format: ${JSON.stringify(results, null, 2)}`,
+                        text: `Error when calling tool ${params.name}, error: ${error}`,
                     }];
+                    toolResultBlock.is_error = true;
+                    span.recordException(error as Error);
+                    span.setStatus({ code: 2, message: error instanceof Error ? error.message : String(error) }); // ERROR
+                } finally {
+                    span.end();
                 }
-            } catch (error) {
-                log.error(`Error when calling tool ${params.name}: ${error}`);
-                toolResultBlock.content = [{
-                    type: 'text',
-                    text: `Error when calling tool ${params.name}, error: ${error}`,
-                }];
-                toolResultBlock.is_error = true;
-            }
+            });
 
             userToolResultsMessage.content.push(toolResultBlock);
             log.debug(`[internal] emitting SSE tool_result message: ${JSON.stringify(toolResultBlock)}`);
@@ -489,20 +541,40 @@ export class ConversationManager {
      * 3) Return or yield partial results so we can SSE them to the browser.
      */
     async processUserQuery(client: Client, query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void) {
-        log.debug(`[internal] Call LLM with user query: ${JSON.stringify(query)}`);
-        this.conversation.push({ role: 'user', content: query });
+        return tracer.startActiveSpan('processUserQuery', async (span) => {
+            span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'agent');
+            span.setAttribute(SemanticConventions.INPUT_VALUE, query);
+            span.setAttribute(SemanticConventions.LLM_MODEL_NAME, this.modelName);
+            span.setAttribute(SemanticConventions.SESSION_ID, this.sessionId);
+            try {
+                log.debug(`[internal] Call LLM with user query: ${JSON.stringify(query)}`);
+                this.conversation.push({ role: 'user', content: query });
 
-        try {
-            const response = await this.createMessageWithRetry();
-            log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
-            log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
-            await this.handleLLMResponse(client, response, sseEmit);
-        } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            this.conversation.push({ role: 'assistant', content: errorMsg });
-            sseEmit('assistant', errorMsg);
-            throw new Error(errorMsg);
-        }
+                const response = await this.createMessageWithRetry();
+                log.debug(`[internal] Received response: ${JSON.stringify(response.content)}`);
+                log.debug(`[internal] Token count: ${JSON.stringify(response.usage)}`);
+                await this.handleLLMResponse(client, response, sseEmit);
+
+                // Set output value from the final response
+                const outputText = response.content
+                    .filter((block) => block.type === 'text')
+                    .map((block) => block.text)
+                    .join(' ');
+                if (outputText) {
+                    span.setAttribute(SemanticConventions.OUTPUT_VALUE, outputText);
+                }
+                span.setStatus({ code: 1 }); // SUCCESS
+            } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                this.conversation.push({ role: 'assistant', content: errorMsg });
+                sseEmit('assistant', errorMsg);
+                span.recordException(error as Error);
+                span.setStatus({ code: 2, message: errorMsg }); // ERROR
+                throw new Error(errorMsg);
+            } finally {
+                span.end();
+            }
+        });
     }
 
     handleNotification(notification: Notification) {
