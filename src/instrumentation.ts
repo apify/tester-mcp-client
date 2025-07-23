@@ -5,20 +5,36 @@ import { resourceFromAttributes } from '@opentelemetry/resources';
 import { BasicTracerProvider, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+import { log } from 'apify';
 
-const COLLECTOR_ENDPOINT = 'https://app.phoenix.arize.com/s/michal-kalita';
-const SERVICE_NAME = 'mcp-client';
+import { TELEMETRY_SERVICE_NAME } from './const.js';
 
+/**
+ * Create a OpenTelemetry provider and return a tracer instance.
+ * @example
+ * ```typescript
+ * // Example usage of the tracer
+ * tracer.startActiveSpan('test-span', (span) => {
+ *     span.setAttribute('test-attribute', 'value');
+ *
+ *     // Simulate some work
+ *     setTimeout(() => {
+ *         span.setAttribute('test-duration', '100ms');
+ *         span.end();
+ *     }, 100);
+ * });
+ * ```
+ */
 export function initializeTelemetry(): Tracer {
     const provider = new NodeTracerProvider({
         resource: resourceFromAttributes({
-            [ATTR_SERVICE_NAME]: SERVICE_NAME,
-            [SEMRESATTRS_PROJECT_NAME]: SERVICE_NAME,
+            [ATTR_SERVICE_NAME]: TELEMETRY_SERVICE_NAME,
+            [SEMRESATTRS_PROJECT_NAME]: TELEMETRY_SERVICE_NAME,
         }),
         spanProcessors: [
             new SimpleSpanProcessor(
                 new OTLPTraceExporter({
-                    url: `${COLLECTOR_ENDPOINT}/v1/traces`,
+                    url: `${process.env.COLLECTOR_ENDPOINT}/v1/traces`,
                     // (optional) if connecting to Phoenix with Authentication enabled
                     headers: { Authorization: `Bearer ${process.env.PHOENIX_API_KEY}` },
                 }),
@@ -28,27 +44,16 @@ export function initializeTelemetry(): Tracer {
 
     provider.register();
 
-    // Example usage of the tracer
-    // tracer.startActiveSpan('test-span', (span) => {
-    //     span.setAttribute('test-attribute', 'value');
-
-    //     // Simulate some work
-    //     setTimeout(() => {
-    //         span.setAttribute('test-duration', '100ms');
-    //         span.end();
-    //     }, 100);
-    // });
-
     process.on('exit', async () => {
-        console.log('Shutting down OpenTelemetry provider...');
-        provider.shutdown().catch(console.error);
-        console.log('OpenTelemetry provider shutdown complete.');
+        log.debug('Shutting down OpenTelemetry provider...');
+        provider.shutdown().catch(log.error);
+        log.debug('OpenTelemetry provider shutdown complete.');
     });
 
-    return provider.getTracer(SERVICE_NAME);
+    return provider.getTracer(TELEMETRY_SERVICE_NAME);
 }
 
 /** Compatible tracer, no-op implementation */
 export function noopTracer(): Tracer {
-    return new BasicTracerProvider().getTracer(SERVICE_NAME);
+    return new BasicTracerProvider().getTracer(TELEMETRY_SERVICE_NAME);
 }

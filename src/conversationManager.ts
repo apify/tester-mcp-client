@@ -111,10 +111,6 @@ export class ConversationManager {
         this.conversation = [];
     }
 
-    getSessionId(): string {
-        return this.sessionId;
-    }
-
     async handleToolUpdate(listTools: ListToolsResult) {
         this.tools = listTools.tools.map((x) => ({
             name: x.name,
