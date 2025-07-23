@@ -421,7 +421,12 @@ export class ConversationManager {
      * @param toolCallCountRound - The current round of tool calls for this query (used to enforce limits).
      * @returns A promise that resolves when the response and all recursive tool calls are fully processed.
      */
-    async handleLLMResponse(client: Client, response: Message, sseEmit: (role: string, content: string | ContentBlockParam[]) => void, toolCallCountRound = 0) {
+    async handleLLMResponse(
+        client: Client,
+        response: Message,
+        sseEmit: (role: string, content: string | ContentBlockParam[]) => Promise<void>,
+        toolCallCountRound = 0,
+    ) {
         log.debug(`[internal] handleLLMResponse: ${JSON.stringify(response)}`);
 
         // Refactored: preserve block order as received
@@ -434,7 +439,7 @@ export class ConversationManager {
             if (block.type === 'text') {
                 assistantMessage.content.push(block);
                 log.debug(`[internal] emitting SSE text message: ${block.text}`);
-                sseEmit('assistant', block.text || '');
+                await sseEmit('assistant', block.text || '');
             } else if (block.type === 'tool_use') {
                 if (toolCallCountRound >= this.maxNumberOfToolCallsPerQueryRound) {
                     // Tool call limit hit before any tool_use is processed
@@ -444,13 +449,13 @@ export class ConversationManager {
                         text: msg,
                     });
                     log.debug(`[internal] emitting SSE tool limit message: ${msg}`);
-                    sseEmit('assistant', msg);
+                    await sseEmit('assistant', msg);
                     this.conversation.push(assistantMessage);
                     break;
                 }
                 assistantMessage.content.push(block);
                 log.debug(`[internal] emitting SSE tool_use message: ${JSON.stringify(block)}`);
-                sseEmit('assistant', [block]);
+                await sseEmit('assistant', [block]);
                 toolUseBlocks.push(block);
             }
         }
@@ -520,7 +525,7 @@ export class ConversationManager {
 
             userToolResultsMessage.content.push(toolResultBlock);
             log.debug(`[internal] emitting SSE tool_result message: ${JSON.stringify(toolResultBlock)}`);
-            sseEmit('user', [toolResultBlock]);
+            await sseEmit('user', [toolResultBlock]);
         }
 
         // Add the user tool results message to the conversation
@@ -540,8 +545,8 @@ export class ConversationManager {
      * 2) If "tool_use" is present, call the main actor's tool via `this.mcpClient.callTool()`.
      * 3) Return or yield partial results so we can SSE them to the browser.
      */
-    async processUserQuery(client: Client, query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => void) {
-        return tracer.startActiveSpan('processUserQuery', async (span) => {
+    async processUserQuery(client: Client, query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => Promise<void>): Promise<void> {
+        return await tracer.startActiveSpan('processUserQuery', async (span) => {
             span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'agent');
             span.setAttribute(SemanticConventions.INPUT_VALUE, query);
             span.setAttribute(SemanticConventions.LLM_MODEL_NAME, this.modelName);
@@ -559,7 +564,7 @@ export class ConversationManager {
                 const outputText = response.content
                     .filter((block) => block.type === 'text')
                     .map((block) => block.text)
-                    .join(' ');
+                    .join('\n');
                 if (outputText) {
                     span.setAttribute(SemanticConventions.OUTPUT_VALUE, outputText);
                 }
@@ -567,7 +572,7 @@ export class ConversationManager {
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 this.conversation.push({ role: 'assistant', content: errorMsg });
-                sseEmit('assistant', errorMsg);
+                await sseEmit('assistant', errorMsg);
                 span.recordException(error as Error);
                 span.setStatus({ code: 2, message: errorMsg }); // ERROR
                 throw new Error(errorMsg);
