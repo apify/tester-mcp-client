@@ -22,6 +22,8 @@ export type Input = {
     mcpTransportType: McpTransportType,
     systemPrompt: string,
     toolCallTimeoutSec: number,
+    /** Optional can enable telemetry */
+    telemetry?: boolean,
 };
 
 export type StandbyInput = Input & {

@@ -9,10 +9,10 @@ import { SemanticConventions } from '@arizeai/openinference-semantic-conventions
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { ListToolsResult, Notification, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import type { Tracer } from '@opentelemetry/api';
 import { log } from 'apify';
 import { EventSource } from 'eventsource';
 
-import { tracer } from './instrumentation.js';
 import type { MessageParamWithBlocks, TokenCharger, Tool } from './types.js';
 import { pruneAndFixConversation } from './utils.js';
 
@@ -41,6 +41,8 @@ export class ConversationManager {
     private readonly maxContextTokens: number;
     private readonly sessionId: string;
 
+    private readonly tracer: Tracer;
+
     constructor(
         systemPrompt: string,
         modelName: string,
@@ -48,6 +50,7 @@ export class ConversationManager {
         modelMaxOutputTokens: number,
         maxNumberOfToolCallsPerQuery: number,
         toolCallTimeoutSec: number,
+        tracer: Tracer,
         tokenCharger: TokenCharger | null = null,
         persistedConversation: MessageParam[] = [],
         maxContextTokens: number = DEFAULT_MAX_CONTEXT_TOKENS,
@@ -58,6 +61,7 @@ export class ConversationManager {
         this.modelMaxOutputTokens = modelMaxOutputTokens;
         this.maxNumberOfToolCallsPerQueryRound = maxNumberOfToolCallsPerQuery;
         this.toolCallTimeoutSec = toolCallTimeoutSec;
+        this.tracer = tracer;
         this.tokenCharger = tokenCharger;
         this.anthropic = new Anthropic({ apiKey });
         this.conversation = [...persistedConversation];
@@ -305,7 +309,7 @@ export class ConversationManager {
         maxRetries = 3,
         retryDelayMs = 2000, // 2 seconds
     ): Promise<Message> {
-        return tracer.startActiveSpan('createMessage', async (span) => {
+        return this.tracer.startActiveSpan('createMessage', async (span) => {
             span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'llm');
             span.setAttribute(SemanticConventions.LLM_MODEL_NAME, this.modelName);
             span.setAttribute(SemanticConventions.SESSION_ID, this.sessionId);
@@ -487,7 +491,7 @@ export class ConversationManager {
                 is_error: false,
             };
 
-            await tracer.startActiveSpan('toolCall', async (span) => {
+            await this.tracer.startActiveSpan('toolCall', async (span) => {
                 span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'tool');
                 span.setAttribute(SemanticConventions.TOOL_NAME, params.name);
                 span.setAttribute(SemanticConventions.TOOL_PARAMETERS, JSON.stringify(params.arguments));
@@ -546,7 +550,7 @@ export class ConversationManager {
      * 3) Return or yield partial results so we can SSE them to the browser.
      */
     async processUserQuery(client: Client, query: string, sseEmit: (role: string, content: string | ContentBlockParam[]) => Promise<void>): Promise<void> {
-        return await tracer.startActiveSpan('processUserQuery', async (span) => {
+        return await this.tracer.startActiveSpan('processUserQuery', async (span) => {
             span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'agent');
             span.setAttribute(SemanticConventions.INPUT_VALUE, query);
             span.setAttribute(SemanticConventions.LLM_MODEL_NAME, this.modelName);

@@ -87,6 +87,13 @@
             "editor": "number",
             "prefill": 300,
             "default": 300
+        },
+        "telemetry": {
+            "title": "Enable telemetry",
+            "type": "boolean",
+            "description": "Enable telemetry to collect inputs and outputs. This helps us improve the MCP tools.",
+            "editor": "hidden",
+            "default": false
         }
     },
     "required": [

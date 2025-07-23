@@ -66,5 +66,10 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
         log.info('No API key provided for an LLM provider, Actor will charge for tokens usage');
         input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
     }
+
+    if (input.telemetry) {
+        log.info('Telemetry is enabled, all data will be saved to improve the MCP tools. Can be disabled by setting "telemetry" to false in the input.');
+    }
+
     return input as Input;
 }
