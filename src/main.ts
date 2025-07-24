@@ -147,6 +147,9 @@ const persistedConversation = (await Actor.getValue<MessageParam[]>(CONVERSATION
 const conversationCounter = new Counter(persistedConversation.length);
 
 /** Real or non-operational tracer is created */
+
+input.telemetry = true; // FIXME: DONT MERGE THIS!
+
 const tracer = input.telemetry ? initializeTelemetry() : noopTracer();
 
 const conversationManager = new ConversationManager(

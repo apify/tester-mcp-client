@@ -308,6 +308,8 @@ export class ConversationManager {
         return this.tracer.startActiveSpan('createMessage', async (span) => {
             span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'llm');
             span.setAttribute(SemanticConventions.LLM_MODEL_NAME, this.modelName);
+            // Phoenix UI itself not visualize tools, but evaluation tests do
+            span.setAttribute(SemanticConventions.LLM_TOOLS, JSON.stringify(this.tools));
             span.setAttribute(SemanticConventions.SESSION_ID, this.sessionId);
 
             try {
@@ -550,6 +552,7 @@ export class ConversationManager {
             span.setAttribute(SemanticConventions.OPENINFERENCE_SPAN_KIND, 'agent');
             span.setAttribute(SemanticConventions.INPUT_VALUE, query);
             span.setAttribute(SemanticConventions.LLM_MODEL_NAME, this.modelName);
+            span.setAttribute(SemanticConventions.LLM_TOOLS, JSON.stringify(this.tools));
             span.setAttribute(SemanticConventions.SESSION_ID, this.sessionId);
             try {
                 log.debug(`[internal] Call LLM with user query: ${JSON.stringify(query)}`);
@@ -577,6 +580,7 @@ export class ConversationManager {
                 span.setStatus({ code: 2, message: errorMsg }); // ERROR
                 throw new Error(errorMsg);
             } finally {
+                span.setAttribute(SemanticConventions.LLM_OUTPUT_MESSAGES, JSON.stringify(this.conversation));
                 span.end();
             }
         });
