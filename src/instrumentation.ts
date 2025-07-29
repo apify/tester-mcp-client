@@ -25,7 +25,7 @@ import { TELEMETRY_SERVICE_NAME } from './const.js';
  * });
  * ```
  */
-export function initializeTelemetry(): Tracer {
+export function initializeTelemetry(phoenixApiKey: string, collectorEndpoint: string): Tracer {
     const provider = new NodeTracerProvider({
         resource: resourceFromAttributes({
             [ATTR_SERVICE_NAME]: TELEMETRY_SERVICE_NAME,
@@ -34,9 +34,9 @@ export function initializeTelemetry(): Tracer {
         spanProcessors: [
             new SimpleSpanProcessor(
                 new OTLPTraceExporter({
-                    url: `${process.env.COLLECTOR_ENDPOINT}/v1/traces`,
+                    url: `${collectorEndpoint}/v1/traces`,
                     // (optional) if connecting to Phoenix with Authentication enabled
-                    headers: { Authorization: `Bearer ${process.env.PHOENIX_API_KEY}` },
+                    headers: { Authorization: `Bearer ${phoenixApiKey}` },
                 }),
             ),
         ],

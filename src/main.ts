@@ -147,10 +147,19 @@ const persistedConversation = (await Actor.getValue<MessageParam[]>(CONVERSATION
 const conversationCounter = new Counter(persistedConversation.length);
 
 /** Real or non-operational tracer is created */
-
-input.telemetry = true; // FIXME: DONT MERGE THIS!
-
-const tracer = input.telemetry ? initializeTelemetry() : noopTracer();
+let tracer;
+if (input.telemetry) {
+    const { PHOENIX_API_KEY, COLLECTOR_ENDPOINT } = process.env;
+    if (PHOENIX_API_KEY && COLLECTOR_ENDPOINT) {
+        tracer = initializeTelemetry(PHOENIX_API_KEY, COLLECTOR_ENDPOINT);
+    } else {
+        log.warning('Telemetry requested but environment variables not set. '
+            + 'PHOENIX_API_KEY and COLLECTOR_ENDPOINT are required for telemetry.');
+        tracer = noopTracer();
+    }
+} else {
+    tracer = noopTracer();
+}
 
 const conversationManager = new ConversationManager(
     input.systemPrompt,
