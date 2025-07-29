@@ -32,3 +32,5 @@ export const Event = {
 export const CONVERSATION_RECORD_NAME = 'CONVERSATION';
 
 export const IMAGE_BASE64_PLACEHOLDER = '[Base64 encoded content - image was pruned to save context tokens]';
+
+export const TELEMETRY_SERVICE_NAME = 'mcp-client';

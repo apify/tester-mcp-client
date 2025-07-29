@@ -23,6 +23,7 @@ import { BASIC_INFORMATION, CONVERSATION_RECORD_NAME, Event } from './const.js';
 import { ConversationManager } from './conversationManager.js';
 import { Counter } from './counter.js';
 import { processInput, getChargeForTokens } from './input.js';
+import { initializeTelemetry, noopTracer } from './instrumentation.js';
 import { log } from './logger.js';
 import type { TokenCharger, Input } from './types.js';
 import inputSchema from '../.actor/input_schema.json' with { type: 'json' };
@@ -145,6 +146,21 @@ app.use(express.static(publicPath));
 const persistedConversation = (await Actor.getValue<MessageParam[]>(CONVERSATION_RECORD_NAME)) ?? [];
 const conversationCounter = new Counter(persistedConversation.length);
 
+/** Real or non-operational tracer is created */
+let tracer;
+if (input.telemetry) {
+    const { PHOENIX_API_KEY, COLLECTOR_ENDPOINT } = process.env;
+    if (PHOENIX_API_KEY && COLLECTOR_ENDPOINT) {
+        tracer = initializeTelemetry(PHOENIX_API_KEY, COLLECTOR_ENDPOINT);
+    } else {
+        log.warning('Telemetry requested but environment variables not set. '
+            + 'PHOENIX_API_KEY and COLLECTOR_ENDPOINT are required for telemetry.');
+        tracer = noopTracer();
+    }
+} else {
+    tracer = noopTracer();
+}
+
 const conversationManager = new ConversationManager(
     input.systemPrompt,
     input.modelName,
@@ -152,6 +168,7 @@ const conversationManager = new ConversationManager(
     input.modelMaxOutputTokens,
     input.maxNumberOfToolCallsPerQuery,
     input.toolCallTimeoutSec,
+    tracer,
     getChargeForTokens() ? new ActorTokenCharger() : null,
     persistedConversation,
 );
