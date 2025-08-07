@@ -3,6 +3,8 @@
  *
  */
 
+import crypto from 'crypto';
+
 import { Anthropic } from '@anthropic-ai/sdk';
 import type { ContentBlockParam, Message, MessageParam, TextBlockParam, ImageBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import { SemanticConventions } from '@arizeai/openinference-semantic-conventions';
