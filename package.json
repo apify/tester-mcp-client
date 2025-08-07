@@ -40,7 +40,7 @@
     "@opentelemetry/sdk-trace-base": "^2.0.1",
     "@opentelemetry/sdk-trace-node": "^2.0.1",
     "@opentelemetry/semantic-conventions": "^1.36.0",
-    "apify": "^3.3.2",
+    "apify": "^3.4.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "eventsource": "^3.0.2",

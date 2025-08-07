@@ -29,6 +29,7 @@
             "title": "HTTP headers",
             "type": "object",
             "description": "HTTP headers to be sent with the request to the MCP server. If you are using Apify's MCP server, headers are NOT required",
+            "isSecret": true,
             "editor": "json"
         },
         "systemPrompt": {
