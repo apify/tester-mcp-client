@@ -148,10 +148,11 @@ const conversationCounter = new Counter(persistedConversation.length);
 
 /** Real or non-operational tracer is created */
 let tracer;
-if (input.telemetry) {
+if (input.telemetryEnabled) {
     const { PHOENIX_API_KEY, COLLECTOR_ENDPOINT } = process.env;
     if (PHOENIX_API_KEY && COLLECTOR_ENDPOINT) {
-        tracer = initializeTelemetry(PHOENIX_API_KEY, COLLECTOR_ENDPOINT);
+        tracer = initializeTelemetry(PHOENIX_API_KEY, COLLECTOR_ENDPOINT, input.telemetryProjectName!);
+        log.info('Telemetry is enabled, all data will be saved to improve the MCP tools. Can be disabled by setting "telemetry" to false in the input.');
     } else {
         log.warning('Telemetry requested but environment variables not set. '
             + 'PHOENIX_API_KEY and COLLECTOR_ENDPOINT are required for telemetry.');
@@ -251,7 +252,7 @@ async function getOrCreateClient(): Promise<Client> {
  * Helper function to handle client cleanup based on transport type
  */
 async function cleanupClient(): Promise<void> {
-    if (input.mcpTransportType === 'http' && client) {
+    if (runtimeSettings.mcpTransportType === 'http' && client) {
         try {
             await client.close();
             client = null;

@@ -23,7 +23,8 @@ export type Input = {
     systemPrompt: string,
     toolCallTimeoutSec: number,
     /** Optional can enable telemetry */
-    telemetry?: boolean,
+    telemetryEnabled?: boolean,
+    telemetryProjectName?: string,
 };
 
 export type StandbyInput = Input & {

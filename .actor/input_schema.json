@@ -89,12 +89,19 @@
             "prefill": 300,
             "default": 300
         },
-        "telemetry": {
+        "telemetryEnabled": {
             "title": "Enable telemetry",
             "type": "boolean",
             "description": "Enable telemetry to collect inputs and outputs. This helps us improve the MCP tools.",
             "editor": "hidden",
             "default": false
+        },
+        "telemetryProjectName": {
+            "title": "Telemetry project name",
+            "type": "string",
+            "description": "Project name for telemetry. This is used to identify the project in the telemetry system.",
+            "editor": "hidden",
+            "default": "tester-mcp-client"
         }
     },
     "required": [

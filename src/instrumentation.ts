@@ -7,7 +7,7 @@ import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { log } from 'apify';
 
-import { TELEMETRY_SERVICE_NAME } from './const.js';
+import { TELEMETRY_PROJECT_NAME } from './const.js';
 
 /**
  * Create a OpenTelemetry provider and return a tracer instance.
@@ -25,11 +25,11 @@ import { TELEMETRY_SERVICE_NAME } from './const.js';
  * });
  * ```
  */
-export function initializeTelemetry(phoenixApiKey: string, collectorEndpoint: string): Tracer {
+export function initializeTelemetry(phoenixApiKey: string, collectorEndpoint: string, telemetryProjectName: string): Tracer {
     const provider = new NodeTracerProvider({
         resource: resourceFromAttributes({
-            [ATTR_SERVICE_NAME]: TELEMETRY_SERVICE_NAME,
-            [SEMRESATTRS_PROJECT_NAME]: TELEMETRY_SERVICE_NAME,
+            [ATTR_SERVICE_NAME]: telemetryProjectName,
+            [SEMRESATTRS_PROJECT_NAME]: telemetryProjectName,
         }),
         spanProcessors: [
             new SimpleSpanProcessor(
@@ -50,10 +50,10 @@ export function initializeTelemetry(phoenixApiKey: string, collectorEndpoint: st
         log.debug('OpenTelemetry provider shutdown complete.');
     });
 
-    return provider.getTracer(TELEMETRY_SERVICE_NAME);
+    return provider.getTracer(TELEMETRY_PROJECT_NAME);
 }
 
 /** Compatible tracer, no-op implementation */
 export function noopTracer(): Tracer {
-    return new BasicTracerProvider().getTracer(TELEMETRY_SERVICE_NAME);
+    return new BasicTracerProvider().getTracer(TELEMETRY_PROJECT_NAME);
 }

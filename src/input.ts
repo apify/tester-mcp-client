@@ -1,4 +1,4 @@
-import { defaults, MISSING_PARAMETER_ERROR } from './const.js';
+import { defaults, MISSING_PARAMETER_ERROR, TELEMETRY_PROJECT_NAME } from './const.js';
 import { log } from './logger.js';
 import type { Input, StandbyInput } from './types.js';
 
@@ -67,9 +67,9 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
         input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
     }
 
-    if (input.telemetry) {
-        log.info('Telemetry is enabled, all data will be saved to improve the MCP tools. Can be disabled by setting "telemetry" to false in the input.');
+    if (input.telemetryEnabled === true && !input.telemetryProjectName) {
+        log.info(`Project name for telemetry is not provided, using default project name: ${TELEMETRY_PROJECT_NAME}`);
+        input.telemetryProjectName = TELEMETRY_PROJECT_NAME;
     }
-
     return input as Input;
 }
