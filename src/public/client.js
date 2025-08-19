@@ -51,8 +51,8 @@ if (basePath.endsWith('/')) {
 }
 
 const fixPath = (path) => {
-    return `${basePath}${path}`
-}
+    return `${basePath}${path}`;
+};
 
 // ================== SSE CONNECTION SETUP ==================
 
