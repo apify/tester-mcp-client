@@ -41,6 +41,15 @@ let reconnectAttempts = 0;
 const maxReconnectAttempts = 3; // Reduced to 3 attempts
 const sseReconnectDelay = 3000; // 3 seconds between attempts
 
+// Fix base path handling:
+// When running the Actor locally on a worker, the URL includes a path segment, e.g. http://localhost:8002/93kgpcnrtfjv/
+// On the Apify platform, the URL is simpler, e.g. https://fqmagpwmiqsj.runs.apify.net/
+// This code dynamically adjusts the EventSource URL to work correctly in both environments by using the current window pathname as the base.
+let basePath = window.location.pathname;
+if (basePath.endsWith('/')) {
+    basePath = basePath.slice(0, -1);
+}
+
 // ================== SSE CONNECTION SETUP ==================
 
 // Function to handle incoming SSE messages
@@ -125,7 +134,7 @@ function createSSEConnection(isInitial = true, force = false) {
     }
     try {
         // Create new connection
-        eventSource = new EventSource('/sse');
+        eventSource = new EventSource(basePath + '/sse');
         eventSource.onmessage = handleSSEMessage;
         eventSource.onerror = handleSSEError;
         eventSource.onopen = () => {
