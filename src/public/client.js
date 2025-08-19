@@ -134,7 +134,7 @@ function createSSEConnection(isInitial = true, force = false) {
     }
     try {
         // Create new connection
-        eventSource = new EventSource(basePath + '/sse');
+        eventSource = new EventSource(`${basePath}/sse`);
         eventSource.onmessage = handleSSEMessage;
         eventSource.onerror = handleSSEError;
         eventSource.onopen = () => {
