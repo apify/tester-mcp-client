@@ -50,6 +50,10 @@ if (basePath.endsWith('/')) {
     basePath = basePath.slice(0, -1);
 }
 
+const fixPath = (path) => {
+    return `${basePath}${path}`
+}
+
 // ================== SSE CONNECTION SETUP ==================
 
 // Function to handle incoming SSE messages
@@ -134,7 +138,7 @@ function createSSEConnection(isInitial = true, force = false) {
     }
     try {
         // Create new connection
-        eventSource = new EventSource(`${basePath}/sse`);
+        eventSource = new EventSource(fixPath('/sse'));
         eventSource.onmessage = handleSSEMessage;
         eventSource.onerror = handleSSEError;
         eventSource.onopen = () => {
@@ -169,7 +173,7 @@ createSSEConnection(true);
 // Initial connection on a page load
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        const resp = await fetch('/client-info');
+        const resp = await fetch(fixPath('/client-info'));
         const data = await resp.json();
         if (mcpUrl) mcpUrl.textContent = data.mcpUrl;
         if (clientInfo) clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
@@ -196,7 +200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     try {
-        const response = await fetch('/conversation');
+        const response = await fetch(fixPath('/conversation'));
         if (response.ok) {
             const conversation = await response.json();
             conversation.forEach(({ role, content }) => {
@@ -226,7 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Function to load model options dynamically
     async function loadModelOptions() {
         try {
-            const resp = await fetch('/schema/models');
+            const resp = await fetch(fixPath('/schema/models'));
             const modelOptions = await resp.json();
             modelNameSelect.innerHTML = '';
             modelOptions.forEach((option) => {
@@ -243,7 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadModelOptions();
     // Load current settings
     try {
-        const resp = await fetch('/settings');
+        const resp = await fetch(fixPath('/settings'));
         const settings = await resp.json();
         mcpSseUrlInput.value = settings.mcpUrl;
         modelNameSelect.value = settings.modelName;
@@ -267,7 +271,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             systemPrompt: systemPromptInput.value,
         };
         try {
-            const resp = await fetch('/settings', {
+            const resp = await fetch(fixPath('/settings'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSettings),
@@ -276,7 +280,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (result.success) {
                 showNotification('Settings updated successfully for the current session only. Settings will reset when the Actor is restarted.', 'success');
                 hideModal('settingsModal');
-                const clientInfoResp = await fetch('/client-info');
+                const clientInfoResp = await fetch(fixPath('/client-info'));
                 const clientInfoData = await clientInfoResp.json();
                 if (mcpUrl) mcpUrl.textContent = clientInfoData.mcpUrl;
             } else {
@@ -290,12 +294,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Reset settings to defaults
     resetSettingsBtn.addEventListener('click', async () => {
         try {
-            const resp = await fetch('/settings/reset', { method: 'POST' });
+            const resp = await fetch(fixPath('/settings/reset'), { method: 'POST' });
             const result = await resp.json();
             if (result.success) {
                 await loadModelOptions();
                 // Reload the form with defaults from the server
-                const settingsResp = await fetch('/settings');
+                const settingsResp = await fetch(fixPath('/settings'));
                 const settings = await settingsResp.json();
                 mcpSseUrlInput.value = settings.mcpUrl;
                 modelNameSelect.value = settings.modelName;
@@ -711,7 +715,7 @@ async function sendQuery(query) {
     appendMessage('user', query);
 
     try {
-        const resp = await fetch('/message', {
+        const resp = await fetch(fixPath('/message'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query }),
@@ -737,7 +741,7 @@ clearBtn.addEventListener('click', async () => {
         messages.length = 0;
         chatLog.innerHTML = '';
 
-        const resp = await fetch('/conversation/reset', { method: 'POST' });
+        const resp = await fetch(fixPath('/conversation/reset'), { method: 'POST' });
         const data = await resp.json();
 
         if (data.error) {
@@ -759,7 +763,7 @@ clearBtn.addEventListener('click', async () => {
 // Add this new function near other utility functions
 async function checkActorTimeout() {
     try {
-        const response = await fetch('/check-actor-timeout');
+        const response = await fetch(fixPath('/check-actor-timeout'));
         const data = await response.json();
 
         if (data.timeoutImminent) {
@@ -809,7 +813,7 @@ async function reconnectAndPing() {
     try {
         // Force a new connection attempt
         createSSEConnection(false, true);
-        const resp = await fetch('/reconnect-mcp-server');
+        const resp = await fetch(fixPath('/reconnect-mcp-server'));
         const data = await resp.json();
         console.log('Ping response:', data);
         if (data.status !== true && data.status !== 'OK') {
@@ -838,7 +842,7 @@ reconnectMcpServerBtn.addEventListener('click', async () => {
 // Fetch available tools
 async function fetchAvailableTools() {
     try {
-        const response = await fetch('/available-tools');
+        const response = await fetch(fixPath('/available-tools'));
         const data = await response.json();
 
         if (data.tools && data.tools.length > 0) {
