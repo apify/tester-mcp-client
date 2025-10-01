@@ -333,6 +333,7 @@ export class ConversationManager {
                             system: this.systemPrompt,
                             tools: this.tools as any[], // eslint-disable-line @typescript-eslint/no-explicit-any
                         });
+                        log.info(`Charging for tokens: input ${this.modelName}`);
                         if (this.tokenCharger && response.usage) {
                             const inputTokens = response.usage.input_tokens ?? 0;
                             const outputTokens = response.usage.output_tokens ?? 0;

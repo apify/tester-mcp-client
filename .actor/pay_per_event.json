@@ -1,21 +1,16 @@
 {
-    "actor-start": {
-        "eventTitle": "Actor start",
-        "eventDescription": "Flat fee for starting an Actor run.",
-        "eventPriceUsd": 0.005
-    },
     "actor-running-time": {
         "eventTitle": "Actor running time (5 minutes)",
         "eventDescription": "Cost per running time for each 5 minutes.",
         "eventPriceUsd":0.005
     },
     "input-tokens-sonnet-4": {
-        "eventTitle": "100 input tokens (Sonnet-4)",
+        "eventTitle": "100 input tokens (Sonnet-4-x)",
         "eventDescription": "Cost per 100 input tokens for Claude 4 Sonnet (1M tokens = 3$).",
         "eventPriceUsd": 0.0003
     },
     "output-tokens-sonnet-4": {
-        "eventTitle": "100 output tokens (Sonnet-4)",
+        "eventTitle": "100 output tokens (Sonnet-4-x)",
         "eventDescription": "Cost per 100 output tokens for Claude 4 Sonnet (1M tokens = 15$).",
         "eventPriceUsd": 0.0015
     },

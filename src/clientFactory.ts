@@ -25,7 +25,7 @@ export async function createClient(
     onNotification: (notification: LoggingMessageNotification) => void,
 ): Promise<Client> {
     const client = new Client(
-        { name: 'example-client', version: '1.0.0' },
+        { name: 'apify-mcp-client', version: '1.0.0' },
         { capabilities: {} },
     );
 
