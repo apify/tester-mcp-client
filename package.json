@@ -33,7 +33,7 @@
     "@anthropic-ai/sdk": "^0.36.2",
     "@anthropic-ai/tokenizer": "^0.0.4",
     "@arizeai/openinference-semantic-conventions": "^2.1.0",
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.18.2",
     "@opentelemetry/exporter-trace-otlp-proto": "^0.203.0",
     "@opentelemetry/instrumentation": "^0.203.0",
     "@opentelemetry/resources": "^2.0.1",

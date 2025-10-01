@@ -18,7 +18,6 @@ export const BASIC_INFORMATION = 'Once you have the Tester MCP Client running, y
     + '\n';
 
 export const Event = {
-    ACTOR_STARTED: 'actor-start',
     ACTOR_RUNNING_TIME: 'actor-running-time',
     INPUT_TOKENS_SONNET_3_7: 'input-tokens-sonnet-3-7',
     OUTPUT_TOKENS_SONNET_3_7: 'output-tokens-sonnet-3-7',

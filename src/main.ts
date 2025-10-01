@@ -48,6 +48,7 @@ export class ActorTokenCharger implements TokenCharger {
                 eventNameOutput = Event.OUTPUT_TOKENS_SONNET_3_7;
                 break;
             case 'claude-sonnet-4-0':
+            case 'claude-sonnet-4-5-20250929':
                 eventNameInput = Event.INPUT_TOKENS_SONNET_4;
                 eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
                 break;
@@ -77,14 +78,6 @@ setInterval(async () => {
         log.error('Failed to charge for running time', { error });
     }
 }, RUNNING_TIME_INTERVAL);
-
-try {
-    log.info('Charging Actor start event.');
-    await Actor.charge({ eventName: Event.ACTOR_STARTED });
-} catch (error) {
-    log.error('Failed to charge for actor start event', { error });
-    await Actor.exit('Failed to charge for actor start event');
-}
 
 const STANDBY_MODE = Actor.getEnv().metaOrigin === 'STANDBY';
 const ACTOR_IS_AT_HOME = Actor.isAtHome();

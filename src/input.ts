@@ -70,6 +70,8 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
     if (input.telemetry) {
         log.info('Telemetry is enabled, all data will be saved to improve the MCP tools. Can be disabled by setting "telemetry" to false in the input.');
     }
-
+    // update system prompt with current date and time
+    const currentDate = new Date().toUTCString();
+    input.systemPrompt += `\nCurrent date and UTC time ${currentDate}`;
     return input as Input;
 }
