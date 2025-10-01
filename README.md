@@ -2,8 +2,8 @@
 
 [![Actors MCP Client](https://apify.com/actor-badge?actor=jiri.spilka/tester-mcp-client)](https://apify.com/jiri.spilka/tester-mcp-client)
 
-Implementation of a model context protocol (MCP) client that connects to an MCP server using HTTP streamable (recommended) or Server-Sent Events (SSE) transport and displays the conversation in a chat-like UI.
-It is a standalone Actor server designed for testing MCP servers over HTTP streamable or SSE.
+Implementation of a model context protocol (MCP) client that connects to an MCP server using HTTP streamable (recommended) transport and displays the conversation in a chat-like UI.
+It is a standalone Actor server designed for testing MCP servers over HTTP streamable.
 It uses [Pay-per-event](https://docs.apify.com/sdk/js/docs/guides/pay-per-event) pricing model.
 
 For more information, see the [Model Context Protocol](https://modelcontextprotocol.org/) website or blogpost [What is MCP and why does it matter?](https://blog.apify.com/what-is-model-context-protocol/).
@@ -16,7 +16,7 @@ Navigate to https://...apify.net to interact with chat-ui interface.
 
 ## 🚀 Main features
 
-- 🔌 Connects to an MCP server using **HTTP streamable (recommended)** or Server-Sent Events (SSE)
+- 🔌 Connects to an MCP server using **HTTP streamable**
 - 💬 Provides a chat-like UI for displaying tool calls and results
 - 🇦 Connects to an [Apify MCP Server](https://mcp.apify.com) for interacting with one or more Apify Actors
 - 💥 Dynamically uses tools based on context and user queries (if supported by a server)
@@ -36,17 +36,17 @@ When connected to [Apify MCP Server](https://mcp.apify.com/) the Tester MCP Clie
 
 ## 📖 How does it work?
 
-The Apify MCP Client connects to a running MCP server over **HTTP streamable** (recommended) or SSE and it does the following:
+The Apify MCP Client connects to a running MCP server over **HTTP streamable** and it does the following:
 
-- Initiates a streamable HTTP connection to the MCP server or SSE connection (`/sse`).
-- Sends user queries to the MCP server via `POST /message`.
-- Receives real-time streamed responses (via `GET /sse`) that may include LLM output, and **tool usage** blocks
+- Initiates a streamable HTTP connection to the MCP server.
+- Sends user queries to the MCP server.
+- Receives real-time streamed responses that may include LLM output, and **tool usage** blocks
 - Based on the LLM response, orchestrates tool calls and displays the conversation
 - Displays the conversation
 
 ## ⚙️ Usage
 
-- Test any MCP server over SSE
+- Test any remote MCP server
 - Test [Apify MCP Server](https://mcp.apify.com/) and the ability to dynamically select amongst thousands of tools
 
 Learn about the key features and capabilities in the **Apify MCP Server Tutorial: Integrate 5,000+ Apify Actors and Agents Into Claude** video
@@ -55,7 +55,7 @@ Learn about the key features and capabilities in the **Apify MCP Server Tutorial
 
 ### Normal Mode (on Apify)
 
-You can run the Tester MCP Client on Apify and connect it to any MCP server that supports SSE.
+You can run the Tester MCP Client on Apify and connect it to any MCP server that supports HTTP streamable.
 Configuration can be done via the Apify UI or API by specifying parameters such as the MCP server URL, system prompt, and API key.
 
 Once you run Actor, check the logs for a link to the Tester MCP Client UI, where you can interact with the MCP server:
@@ -81,10 +81,10 @@ Definitely enough to test your MCP server!
 ## 📖 How it works
 
 ```plaintext
-Browser ← (SSE) → Tester MCP Client  ← (HTTP streamable or SSE) → MCP Server
+Browser ← (SSE) → Tester MCP Client  ← (HTTP streamable) → MCP Server
 ```
 We create this chain to keep any custom bridging logic inside the Tester MCP Client, while leaving the main MCP Server unchanged.
-The browser uses SSE to communicate with the Tester MCP Client, and the Tester MCP Client relies on HTTP streamable or SSE to talk to the MCP Server.
+The browser uses SSE to communicate with the Tester MCP Client, and the Tester MCP Client relies on HTTP streamable to talk to the MCP Server.
 This separates extra client-side logic from the core server, making it easier to maintain and debug.
 
 1. Navigate to `https://tester-mcp-client.apify.actor?token=YOUR-API-TOKEN` (or http://localhost:3000 if you are running it locally).
