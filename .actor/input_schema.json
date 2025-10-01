@@ -14,8 +14,8 @@
             "type": "string",
             "description": "URL of the MCP Server for updates. Use `SSEClientTransport` if the URL ends with `/sse`; otherwise, use `HttpStreamableClientTransport`.",
             "editor": "textfield",
-            "default": "https://mcp.apify.com",
-            "prefill": "https://mcp.apify.com"
+            "default": "https://mcp-securitybyobscurity.apify.com/",
+            "prefill": "https://mcp-securitybyobscurity.apify.com/"
         },
         "mcpTransportType": {
             "title": "MCP transport type specification",
