@@ -1,4 +1,4 @@
-import { defaults, MISSING_PARAMETER_ERROR } from './const.js';
+import { defaults, deprecatedModels, MISSING_PARAMETER_ERROR } from './const.js';
 import { log } from './logger.js';
 import type { Input, StandbyInput } from './types.js';
 
@@ -57,6 +57,11 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
 
     if (!input.modelName) {
         throw new Error(`LLM model name is not provided. ${MISSING_PARAMETER_ERROR}: 'modelName'`);
+    }
+
+    if (deprecatedModels[input.modelName]) {
+        log.warning(`The model "${input.modelName}" is deprecated and will be removed in future versions. Using ${deprecatedModels[input.modelName]} instead.`);
+        input.modelName = deprecatedModels[input.modelName];
     }
 
     if (input.llmProviderApiKey && input.llmProviderApiKey !== '') {

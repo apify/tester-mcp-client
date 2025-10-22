@@ -9,6 +9,12 @@ export const defaults = {
     toolCallTimeoutSec: inputSchema.properties.toolCallTimeoutSec.default,
 };
 
+export const deprecatedModels: Record<string, string> = {
+    'claude-sonnet-4-0': 'claude-sonnet-4-5-20250929',
+    'claude-3-7-sonnet-latest': 'claude-sonnet-4-5-20250929',
+    'claude-3-5-haiku-latest': 'claude-haiku-4-5-20251001',
+};
+
 export const MISSING_PARAMETER_ERROR = `Either provide parameter as Actor input or as query parameter: `;
 
 export const BASIC_INFORMATION = 'Once you have the Tester MCP Client running, you can ask:\n'
@@ -19,12 +25,10 @@ export const BASIC_INFORMATION = 'Once you have the Tester MCP Client running, y
 
 export const Event = {
     ACTOR_RUNNING_TIME: 'actor-running-time',
-    INPUT_TOKENS_SONNET_3_7: 'input-tokens-sonnet-3-7',
-    OUTPUT_TOKENS_SONNET_3_7: 'output-tokens-sonnet-3-7',
-    INPUT_TOKENS_HAIKU_3_5: 'input-tokens-haiku-3-5',
-    OUTPUT_TOKENS_HAIKU_3_5: 'output-tokens-haiku-3-5',
-    INPUT_TOKENS_SONNET_4: 'input-tokens-sonnet-4',
-    OUTPUT_TOKENS_SONNET_4: 'output-tokens-sonnet-4',
+    INPUT_TOKENS_HAIKU: 'input-tokens-haiku',
+    OUTPUT_TOKENS_HAIKU: 'output-tokens-haiku',
+    INPUT_TOKENS_SONNET: 'input-tokens-sonnet',
+    OUTPUT_TOKENS_SONNET: 'output-tokens-sonnet',
     QUERY_ANSWERED: 'query-answered',
 };
 
