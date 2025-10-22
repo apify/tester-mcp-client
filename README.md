@@ -69,10 +69,25 @@ INFO  Navigate to https://......runs.apify.net in your browser to interact with 
 The Apify MCP client uses a modern and flexible approach for AI Agents monetization and pricing called [Pay-per-event](https://docs.apify.com/sdk/js/docs/guides/pay-per-event).
 You only need to have Apify account and you can use it, LLM provider API key is not required but you can supply it if you want to use your own LLM provider.
 
-Events charged:
+### Supported models
+
+**Current models:**
+- **Claude Sonnet 4.5** (`claude-sonnet-4-5-20250929`) - Default for Sonnet
+- **Claude Haiku 4.5** (`claude-haiku-4-5-20251001`) - Default model, faster and more cost-effective
+
+**Deprecated models (still supported with automatic migration):**
+- Claude Sonnet 4.0 (`claude-sonnet-4-0`) → migrates to Sonnet 4.5
+- Claude Sonnet 3.7 (`claude-3-7-sonnet-latest`) → migrates to Sonnet 4.5  
+- Claude Haiku 3.5 (`claude-3-5-haiku-latest`) → migrates to Haiku 4.5
+
+### Events charged
 - Actor start (based on memory used, charged per 128 MB unit)
 - Running time (charged every 5 minutes, per 128 MB unit)
 - Query answered (depends on the model used, not charged if you provide your own API key for LLM provider)
+
+### Token pricing
+- **Claude Sonnet**: $3/1M input tokens, $15/1M output tokens
+- **Claude Haiku**: $1/1M input tokens, $5/1M output tokens (default model)
 
 When you use your own LLM provider API key, running the MCP Client for 1 hour with 128 MB memory costs approximately $0.06.
 With the Apify Free tier (no credit card required 💳), you can run the MCP Client for 80 hours per month.
