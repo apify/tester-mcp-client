@@ -23,6 +23,7 @@ import { BASIC_INFORMATION, CONVERSATION_RECORD_NAME, Event } from './const.js';
 import { ConversationManager } from './conversationManager.js';
 import { Counter } from './counter.js';
 import { processInput, getChargeForTokens } from './input.js';
+import { initializeTelemetry, noopTracer } from './instrumentation.js';
 import { log } from './logger.js';
 import type { TokenCharger, Input } from './types.js';
 import inputSchema from '../.actor/input_schema.json' with { type: 'json' };
@@ -37,24 +38,19 @@ export class ActorTokenCharger implements TokenCharger {
     async chargeTokens(inputTokens: number, outputTokens: number, modelName: string): Promise<void> {
         let eventNameInput: string;
         let eventNameOutput: string;
-        switch (modelName) {
-            case 'claude-3-5-haiku-latest':
-                eventNameInput = Event.INPUT_TOKENS_HAIKU_3_5;
-                eventNameOutput = Event.OUTPUT_TOKENS_HAIKU_3_5;
-                break;
-            case 'claude-3-7-sonnet-latest':
-                eventNameInput = Event.INPUT_TOKENS_SONNET_3_7;
-                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_3_7;
-                break;
-            case 'claude-sonnet-4-0':
-                eventNameInput = Event.INPUT_TOKENS_SONNET_4;
-                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
-                break;
-            default:
-                eventNameInput = Event.INPUT_TOKENS_SONNET_4;
-                eventNameOutput = Event.OUTPUT_TOKENS_SONNET_4;
-                break;
+
+        if (modelName.startsWith('claude-haiku')) {
+            eventNameInput = Event.INPUT_TOKENS_HAIKU;
+            eventNameOutput = Event.OUTPUT_TOKENS_HAIKU;
+        } else if (modelName.startsWith('claude-sonnet')) {
+            eventNameInput = Event.INPUT_TOKENS_SONNET;
+            eventNameOutput = Event.OUTPUT_TOKENS_SONNET;
+        } else {
+            log.warning(`Unknown model name for token charging: ${modelName}. Defaulting to sonnet rates.`);
+            eventNameInput = Event.INPUT_TOKENS_SONNET;
+            eventNameOutput = Event.OUTPUT_TOKENS_SONNET;
         }
+
         try {
             await Actor.charge({ eventName: eventNameInput, count: Math.ceil(inputTokens / 100) });
             await Actor.charge({ eventName: eventNameOutput, count: Math.ceil(outputTokens / 100) });
@@ -76,14 +72,6 @@ setInterval(async () => {
         log.error('Failed to charge for running time', { error });
     }
 }, RUNNING_TIME_INTERVAL);
-
-try {
-    log.info('Charging Actor start event.');
-    await Actor.charge({ eventName: Event.ACTOR_STARTED });
-} catch (error) {
-    log.error('Failed to charge for actor start event', { error });
-    await Actor.exit('Failed to charge for actor start event');
-}
 
 const STANDBY_MODE = Actor.getEnv().metaOrigin === 'STANDBY';
 const ACTOR_IS_AT_HOME = Actor.isAtHome();
@@ -145,6 +133,21 @@ app.use(express.static(publicPath));
 const persistedConversation = (await Actor.getValue<MessageParam[]>(CONVERSATION_RECORD_NAME)) ?? [];
 const conversationCounter = new Counter(persistedConversation.length);
 
+/** Real or non-operational tracer is created */
+let tracer;
+if (input.telemetry) {
+    const { PHOENIX_API_KEY, COLLECTOR_ENDPOINT } = process.env;
+    if (PHOENIX_API_KEY && COLLECTOR_ENDPOINT) {
+        tracer = initializeTelemetry(PHOENIX_API_KEY, COLLECTOR_ENDPOINT);
+    } else {
+        log.warning('Telemetry requested but environment variables not set. '
+            + 'PHOENIX_API_KEY and COLLECTOR_ENDPOINT are required for telemetry.');
+        tracer = noopTracer();
+    }
+} else {
+    tracer = noopTracer();
+}
+
 const conversationManager = new ConversationManager(
     input.systemPrompt,
     input.modelName,
@@ -152,6 +155,7 @@ const conversationManager = new ConversationManager(
     input.modelMaxOutputTokens,
     input.maxNumberOfToolCallsPerQuery,
     input.toolCallTimeoutSec,
+    tracer,
     getChargeForTokens() ? new ActorTokenCharger() : null,
     persistedConversation,
 );
@@ -234,7 +238,7 @@ async function getOrCreateClient(): Promise<Client> {
  * Helper function to handle client cleanup based on transport type
  */
 async function cleanupClient(): Promise<void> {
-    if (input.mcpTransportType === 'http-streamable-json-response' && client) {
+    if (input.mcpTransportType === 'http' && client) {
         try {
             await client.close();
             client = null;

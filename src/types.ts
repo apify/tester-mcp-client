@@ -1,5 +1,10 @@
 import type { ContentBlockParam, MessageParam } from '@anthropic-ai/sdk/resources/index.js';
 
+/**
+ * Use 'sse' or 'http' for MCP servers that support SSE.
+ */
+export type McpTransportType = 'sse' | 'http' | 'http-streamable-json-response';
+
 export type Input = {
     llmProviderApiKey: string,
     modelName: string,
@@ -11,9 +16,14 @@ export type Input = {
      */
     mcpSseUrl: string,
     mcpUrl: string,
-    mcpTransportType: 'sse' | 'http-streamable-json-response',
+    /**
+     * Use 'sse' or 'http'.
+     */
+    mcpTransportType: McpTransportType,
     systemPrompt: string,
     toolCallTimeoutSec: number,
+    /** Optional can enable telemetry */
+    telemetry?: boolean,
 };
 
 export type StandbyInput = Input & {
