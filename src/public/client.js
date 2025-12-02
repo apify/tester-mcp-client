@@ -176,7 +176,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const resp = await fetch(fixPath('/client-info'));
         const data = await resp.json();
         if (mcpUrl) mcpUrl.textContent = data.mcpUrl;
-        if (clientInfo) clientInfo.textContent = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
+        let clientInfoText = `Model name: ${data.modelName}\nSystem prompt: ${data.systemPrompt}`;
+        if (data.serverInstructions) {
+            clientInfoText += `\n\nServer instructions:\n${data.serverInstructions}`;
+        }
+        if (clientInfo) clientInfo.textContent = clientInfoText;
         if (information) information.innerHTML = `${data.information}`;
     } catch (err) {
         console.error('Error fetching client info:', err);
@@ -245,20 +249,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     await loadModelOptions();
-    // Load current settings
-    try {
-        const resp = await fetch(fixPath('/settings'));
-        const settings = await resp.json();
-        mcpSseUrlInput.value = settings.mcpUrl;
-        modelNameSelect.value = settings.modelName;
-        modelMaxTokensInput.value = settings.modelMaxOutputTokens;
-        maxToolCallsInput.value = settings.maxNumberOfToolCallsPerQuery;
-        toolCallTimeoutInput.value = settings.toolCallTimeoutSec;
-        systemPromptInput.value = settings.systemPrompt;
-    } catch (err) {
-        console.error('Error loading settings:', err);
-        showNotification('Failed to load settings. Please check console for details.', 'error');
+
+    // Function to load and display settings
+    async function loadSettings() {
+        try {
+            const resp = await fetch(fixPath('/settings'));
+            const settings = await resp.json();
+            mcpSseUrlInput.value = settings.mcpUrl;
+            modelNameSelect.value = settings.modelName;
+            modelMaxTokensInput.value = settings.modelMaxOutputTokens;
+            maxToolCallsInput.value = settings.maxNumberOfToolCallsPerQuery;
+            toolCallTimeoutInput.value = settings.toolCallTimeoutSec;
+            systemPromptInput.value = settings.systemPrompt;
+
+            // Display server instructions if available
+            const serverInstructionsGroup = document.getElementById('serverInstructionsGroup');
+            const serverInstructionsDisplay = document.getElementById('serverInstructionsDisplay');
+            if (settings.serverInstructions) {
+                if (serverInstructionsGroup) serverInstructionsGroup.style.display = 'block';
+                if (serverInstructionsDisplay) serverInstructionsDisplay.textContent = settings.serverInstructions;
+            }
+            if (!settings.serverInstructions && serverInstructionsGroup) {
+                serverInstructionsGroup.style.display = 'none';
+            }
+        } catch (err) {
+            console.error('Error loading settings:', err);
+            showNotification('Failed to load settings. Please check console for details.', 'error');
+        }
     }
+
+    // Make loadSettings available globally so it can be called from showModal
+    window.loadSettings = loadSettings;
+
+    // Load current settings on page load
+    await loadSettings();
     // Handle form submission
     settingsForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -283,6 +307,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const clientInfoResp = await fetch(fixPath('/client-info'));
                 const clientInfoData = await clientInfoResp.json();
                 if (mcpUrl) mcpUrl.textContent = clientInfoData.mcpUrl;
+                let clientInfoText = `Model name: ${clientInfoData.modelName}\nSystem prompt: ${clientInfoData.systemPrompt}`;
+                if (clientInfoData.serverInstructions) {
+                    clientInfoText += `\n\nServer instructions:\n${clientInfoData.serverInstructions}`;
+                }
+                if (clientInfo) clientInfo.textContent = clientInfoText;
             } else {
                 showNotification(`Failed to update settings: ${result.error}`, 'error');
             }
@@ -307,6 +336,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 maxToolCallsInput.value = settings.maxNumberOfToolCallsPerQuery;
                 toolCallTimeoutInput.value = settings.toolCallTimeoutSec;
                 systemPromptInput.value = settings.systemPrompt;
+
+                // Display server instructions if available
+                const serverInstructionsGroup = document.getElementById('serverInstructionsGroup');
+                const serverInstructionsDisplay = document.getElementById('serverInstructionsDisplay');
+                if (settings.serverInstructions) {
+                    if (serverInstructionsGroup) serverInstructionsGroup.style.display = 'block';
+                    if (serverInstructionsDisplay) serverInstructionsDisplay.textContent = settings.serverInstructions;
+                }
+                if (!settings.serverInstructions && serverInstructionsGroup) {
+                    serverInstructionsGroup.style.display = 'none';
+                }
                 showNotification('Settings reset to defaults successfully!', 'success');
             } else {
                 showNotification(`Failed to reset settings: ${result.error}`, 'error');
@@ -903,6 +943,14 @@ function showModal(modalId) {
         // Refresh tools when tools modal is opened
         if (modalId === 'toolsModal') {
             fetchAvailableTools();
+        }
+        // Refresh settings when settings modal is opened
+        if (modalId === 'settingsModal') {
+            // Access loadSettings from the settings form handler scope
+            const loadSettingsFunc = window.loadSettings;
+            if (loadSettingsFunc) {
+                loadSettingsFunc();
+            }
         }
     }
 }

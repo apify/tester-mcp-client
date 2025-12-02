@@ -116,6 +116,12 @@
                         <small class="form-text">System prompt that guides the model's behavior.</small>
                     </div>
 
+                    <div class="form-group" id="serverInstructionsGroup" style="display: none;">
+                        <label>Server Instructions:</label>
+                        <div id="serverInstructionsDisplay" class="form-control" style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; font-size: 0.9em;"></div>
+                        <small class="form-text">Instructions provided by the MCP server (read-only, automatically appended to system prompt).</small>
+                    </div>
+
                     <div class="form-actions">
                         <button type="submit" id="saveSettingsBtn" class="btn btn-primary">Save Settings for current session</button>
                         <button type="button" id="resetSettingsBtn" class="btn btn-secondary">Reset to defaults</button>

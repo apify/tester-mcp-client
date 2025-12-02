@@ -7,6 +7,7 @@ export const defaults = {
     modelMaxOutputTokens: inputSchema.properties.modelMaxOutputTokens.default,
     maxNumberOfToolCallsPerQuery: inputSchema.properties.maxNumberOfToolCallsPerQuery.default,
     toolCallTimeoutSec: inputSchema.properties.toolCallTimeoutSec.default,
+    includeServerInstructions: inputSchema.properties.includeServerInstructions.default,
 };
 
 export const deprecatedModels: Record<string, string> = {
