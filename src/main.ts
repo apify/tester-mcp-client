@@ -241,9 +241,9 @@ async function getOrCreateClient(): Promise<Client> {
                 (notification) => conversationManager.handleNotification(notification),
             );
             const instructions = client.getInstructions();
-            log.debug(`MCP Server capabilities: ${JSON.stringify(client.getServerCapabilities())}`);
+            log.debug(`Server capabilities: ${JSON.stringify(client.getServerCapabilities())}`);
+            log.debug(`Server instructions: ${JSON.stringify(instructions)}`);
             if (instructions) {
-                log.debug(`Server instructions: ${JSON.stringify(instructions)}`);
                 // Only store instructions if includeServerInstructions is enabled
                 if (runtimeSettings.includeServerInstructions) {
                     serverInstructions = instructions;
