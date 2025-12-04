@@ -118,7 +118,11 @@ let runtimeSettings = {
     modelMaxOutputTokens: input.modelMaxOutputTokens,
     maxNumberOfToolCallsPerQuery: input.maxNumberOfToolCallsPerQuery,
     toolCallTimeoutSec: input.toolCallTimeoutSec,
+    includeServerInstructions: input.includeServerInstructions ?? true,
 };
+
+// Store server instructions separately so they persist across settings updates
+let serverInstructions: string | undefined;
 
 const app = express();
 app.use(express.json());
@@ -210,6 +214,17 @@ app.get('/sse', async (req, res) => {
 });
 
 /**
+ * Helper function to combine base system prompt with server instructions
+ * @returns System prompt with server instructions appended if available and enabled
+ */
+function getSystemPromptWithInstructions(): string {
+    if (runtimeSettings.includeServerInstructions && serverInstructions) {
+        return `${runtimeSettings.systemPrompt}\n\n${serverInstructions}`;
+    }
+    return runtimeSettings.systemPrompt;
+}
+
+/**
  * Helper function to create or get existing MCP client
  * @returns Client instance or throws error
  */
@@ -225,6 +240,21 @@ async function getOrCreateClient(): Promise<Client> {
                 async (tools) => await conversationManager.handleToolUpdate(tools),
                 (notification) => conversationManager.handleNotification(notification),
             );
+            const instructions = client.getInstructions();
+            log.debug(`Server capabilities: ${JSON.stringify(client.getServerCapabilities())}`);
+            log.debug(`Server instructions: ${JSON.stringify(instructions)}`);
+            if (instructions) {
+                // Only store instructions if includeServerInstructions is enabled
+                if (runtimeSettings.includeServerInstructions) {
+                    serverInstructions = instructions;
+                    await conversationManager.updateClientSettings({
+                        systemPrompt: getSystemPromptWithInstructions(),
+                    });
+                } else {
+                    log.debug('Server instructions received but not included (includeServerInstructions is false)');
+                    serverInstructions = undefined;
+                }
+            }
         } catch (err) {
             const error = err as Error;
             log.error('Failed to connect to MCP server', { error: error.message, stack: error.stack });
@@ -305,6 +335,7 @@ app.get('/client-info', (_req, res) => {
         mcpUrl: runtimeSettings.mcpUrl,
         mcpTransportType: runtimeSettings.mcpTransportType,
         systemPrompt: runtimeSettings.systemPrompt,
+        serverInstructions: runtimeSettings.includeServerInstructions ? serverInstructions : undefined,
         modelName: runtimeSettings.modelName,
         publicUrl,
         information: BASIC_INFORMATION,
@@ -359,7 +390,10 @@ app.get('/available-tools', async (_req, res) => {
  * GET /settings endpoint to retrieve current settings
  */
 app.get('/settings', (_req, res) => {
-    res.json(runtimeSettings);
+    res.json({
+        ...runtimeSettings,
+        serverInstructions: runtimeSettings.includeServerInstructions ? serverInstructions : undefined,
+    });
 });
 
 /**
@@ -392,25 +426,35 @@ app.post('/settings', async (req, res) => {
             ...runtimeSettings,
             ...newSettings,
         };
+
+        // If includeServerInstructions is disabled, clear existing instructions
+        if (!runtimeSettings.includeServerInstructions) {
+            serverInstructions = undefined;
+        }
+
+        // Check if MCP URL or transport type is changing
+        const mcpUrlChanged = newSettings.mcpUrl !== undefined || newSettings.mcpTransportType !== undefined;
+        if (mcpUrlChanged && client) {
+            // Clear server instructions before updating if MCP server is changing
+            // They will be re-fetched when the new client is created
+            serverInstructions = undefined;
+            try {
+                await client.close();
+            } catch (err) {
+                log.warning('Error closing client connection:', { error: err });
+            }
+            client = null;
+        }
+
         await conversationManager.updateClientSettings({
-            systemPrompt: runtimeSettings.systemPrompt,
+            systemPrompt: getSystemPromptWithInstructions(),
             modelName: runtimeSettings.modelName,
             modelMaxOutputTokens: runtimeSettings.modelMaxOutputTokens,
             maxNumberOfToolCallsPerQuery: runtimeSettings.maxNumberOfToolCallsPerQuery,
             toolCallTimeoutSec: runtimeSettings.toolCallTimeoutSec,
         });
 
-        if (newSettings.mcpUrl !== undefined || newSettings.mcpTransportType !== undefined) {
-            if (client) {
-                try {
-                    await client.close();
-                } catch (err) {
-                    log.warning('Error closing client connection:', { error: err });
-                }
-                client = null;
-            }
-            // The next API request will create a new client with updated settings
-        }
+        // The next API request will create a new client with updated settings if MCP URL changed
         log.info(`Settings updated: ${JSON.stringify(runtimeSettings)}`);
         res.json({ success: true });
     } catch (error) {
@@ -432,9 +476,10 @@ app.post('/settings/reset', async (_req, res) => {
             modelMaxOutputTokens: input.modelMaxOutputTokens,
             maxNumberOfToolCallsPerQuery: input.maxNumberOfToolCallsPerQuery,
             toolCallTimeoutSec: input.toolCallTimeoutSec,
+            includeServerInstructions: input.includeServerInstructions ?? true,
         };
         await conversationManager.updateClientSettings({
-            systemPrompt: runtimeSettings.systemPrompt,
+            systemPrompt: getSystemPromptWithInstructions(),
             modelName: runtimeSettings.modelName,
             modelMaxOutputTokens: runtimeSettings.modelMaxOutputTokens,
             maxNumberOfToolCallsPerQuery: runtimeSettings.maxNumberOfToolCallsPerQuery,
@@ -449,6 +494,8 @@ app.post('/settings/reset', async (_req, res) => {
                 log.warning('Error closing client connection:', { error: err });
             }
             client = null;
+            // Clear server instructions when client is reset
+            serverInstructions = undefined;
         }
         res.json({ success: true });
     } catch (error) {

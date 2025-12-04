@@ -72,6 +72,10 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
         input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
     }
 
+    if (input.includeServerInstructions === undefined) {
+        input.includeServerInstructions = defaults.includeServerInstructions;
+    }
+
     if (input.telemetry) {
         log.info('Telemetry is enabled, all data will be saved to improve the MCP tools. Can be disabled by setting "telemetry" to false in the input.');
     }

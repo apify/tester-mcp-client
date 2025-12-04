@@ -24,6 +24,8 @@ export type Input = {
     toolCallTimeoutSec: number,
     /** Optional can enable telemetry */
     telemetry?: boolean,
+    /** Optional flag to include server instructions in system prompt */
+    includeServerInstructions?: boolean,
 };
 
 export type StandbyInput = Input & {
