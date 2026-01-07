@@ -1,12 +1,9 @@
-import type { ContentBlockParam, MessageParam } from '@anthropic-ai/sdk/resources/index.js';
-
 /**
  * Use 'sse' or 'http' for MCP servers that support SSE.
  */
 export type McpTransportType = 'sse' | 'http' | 'http-streamable-json-response';
 
 export type Input = {
-    llmProviderApiKey: string,
     modelName: string,
     headers: Record<string, string>,
     maxNumberOfToolCallsPerQuery: number,
@@ -49,8 +46,4 @@ export type Tool = {
  */
 export interface TokenCharger {
     chargeTokens(inputTokens: number, outputTokens: number, modelName: string): Promise<void>;
-}
-
-export interface MessageParamWithBlocks extends MessageParam {
-    content: ContentBlockParam[];
 }

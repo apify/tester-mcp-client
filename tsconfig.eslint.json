@@ -4,6 +4,8 @@
         "src",
         "test",
         "tests",
-        "vitest.config.ts"
+        "vitest.config.ts",
+        "frontend/src",
+        "frontend/vite.config.ts"
     ]
 }

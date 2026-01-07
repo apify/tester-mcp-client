@@ -2,7 +2,7 @@
  * # Chatbot Server with Real-Time Tool Execution
  *
  * Server for a chatbot integrated with Apify Actors and an MCP client.
- * Processes user queries, invokes tools dynamically, and streams real-time updates using Server-Sent Events (SSE)
+ * Processes user queries, invokes tools dynamically, and streams responses via AI SDK endpoints.
  *
  * Environment variables:
  * - `APIFY_TOKEN` - API token for Apify (when using actors-mcp-server)
@@ -11,67 +11,36 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import type { MessageParam } from '@anthropic-ai/sdk/resources/index.js';
+import { createMCPClient } from '@ai-sdk/mcp';
+import { createOpenAI } from '@ai-sdk/openai';
+import type { AssistantModelMessage, ModelMessage, ToolResultOutput, ToolResultPart } from '@ai-sdk/provider-utils';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { ListToolsResult, LoggingMessageNotification } from '@modelcontextprotocol/sdk/types.js';
+import { convertToModelMessages, stepCountIs, streamText } from 'ai';
 import { Actor } from 'apify';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 
+import {
+    createSchemaModelsHandler,
+    createSettingsHandlers,
+    createToolsHandlers,
+} from './apiHandlers.js';
 import { createClient } from './clientFactory.js';
-import { BASIC_INFORMATION, CONVERSATION_RECORD_NAME, Event } from './const.js';
-import { ConversationManager } from './conversationManager.js';
+import { BASIC_INFORMATION, CONVERSATION_RECORD_NAME } from './const.js';
+import {
+    coerceStoredConversation,
+    modelMessagesToLegacyConversation,
+    toolResultToLegacyBlock,
+} from './conversationUtils.js';
 import { Counter } from './counter.js';
-import { processInput, getChargeForTokens } from './input.js';
-import { initializeTelemetry, noopTracer } from './instrumentation.js';
+import { processInput } from './input.js';
 import { log } from './logger.js';
-import type { TokenCharger, Input } from './types.js';
+import type { Input } from './types.js';
 import inputSchema from '../.actor/input_schema.json' with { type: 'json' };
 
 await Actor.init();
-
-/**
- * Charge for token usage
- * We don't want to implement this in the MCPClient as we want to have MCP Client independent of Apify Actor
- */
-export class ActorTokenCharger implements TokenCharger {
-    async chargeTokens(inputTokens: number, outputTokens: number, modelName: string): Promise<void> {
-        let eventNameInput: string;
-        let eventNameOutput: string;
-
-        if (modelName.startsWith('claude-haiku')) {
-            eventNameInput = Event.INPUT_TOKENS_HAIKU;
-            eventNameOutput = Event.OUTPUT_TOKENS_HAIKU;
-        } else if (modelName.startsWith('claude-sonnet')) {
-            eventNameInput = Event.INPUT_TOKENS_SONNET;
-            eventNameOutput = Event.OUTPUT_TOKENS_SONNET;
-        } else {
-            log.warning(`Unknown model name for token charging: ${modelName}. Defaulting to sonnet rates.`);
-            eventNameInput = Event.INPUT_TOKENS_SONNET;
-            eventNameOutput = Event.OUTPUT_TOKENS_SONNET;
-        }
-
-        try {
-            await Actor.charge({ eventName: eventNameInput, count: Math.ceil(inputTokens / 100) });
-            await Actor.charge({ eventName: eventNameOutput, count: Math.ceil(outputTokens / 100) });
-            log.info(`Charged ${inputTokens} input tokens (query+tools) and ${outputTokens} output tokens`);
-        } catch (error) {
-            log.error('Failed to charge for token usage', { error });
-            throw error;
-        }
-    }
-}
-
-// Add after Actor.init()
-const RUNNING_TIME_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
-setInterval(async () => {
-    try {
-        log.info('Charging for running time (every 5 minutes)');
-        await Actor.charge({ eventName: Event.ACTOR_RUNNING_TIME });
-    } catch (error) {
-        log.error('Failed to charge for running time', { error });
-    }
-}, RUNNING_TIME_INTERVAL);
 
 const STANDBY_MODE = Actor.getEnv().metaOrigin === 'STANDBY';
 const ACTOR_IS_AT_HOME = Actor.isAtHome();
@@ -80,7 +49,7 @@ let PORT: string | undefined;
 
 if (ACTOR_IS_AT_HOME) {
     HOST = STANDBY_MODE ? process.env.ACTOR_STANDBY_URL : process.env.ACTOR_WEB_SERVER_URL;
-    PORT = ACTOR_IS_AT_HOME ? process.env.ACTOR_STANDBY_PORT : process.env.ACTOR_WEB_SERVER_PORT;
+    PORT = STANDBY_MODE ? process.env.ACTOR_STANDBY_PORT : process.env.ACTOR_WEB_SERVER_PORT;
 } else {
     const filename = fileURLToPath(import.meta.url);
     const dirname = path.dirname(filename);
@@ -105,12 +74,7 @@ log.debug(`mcpUrl: ${input.mcpUrl}`);
 log.debug(`mcpTransport: ${input.mcpTransportType}`);
 log.debug(`modelName: ${input.modelName}`);
 
-if (!input.llmProviderApiKey) {
-    log.error('No API key provided for LLM provider. Report this issue to Actor developer.');
-    await Actor.exit('No API key provided for LLM provider. Report this issue to Actor developer.');
-}
-
-let runtimeSettings = {
+const defaultRuntimeSettings = {
     mcpUrl: input.mcpUrl,
     mcpTransportType: input.mcpTransportType,
     systemPrompt: input.systemPrompt,
@@ -119,6 +83,113 @@ let runtimeSettings = {
     maxNumberOfToolCallsPerQuery: input.maxNumberOfToolCallsPerQuery,
     toolCallTimeoutSec: input.toolCallTimeoutSec,
 };
+let runtimeSettings = { ...defaultRuntimeSettings };
+
+const OPENROUTER_BASE_URL = 'https://openrouter.apify.actor/api/v1';
+const OPENROUTER_DEFAULT_MODEL = 'anthropic/claude-haiku-4.5';
+const OPENROUTER_API_KEY_PLACEHOLDER = 'no-key-required-but-must-not-be-empty';
+
+const resolveOpenRouterModel = (modelName?: string) => {
+    if (modelName && modelName.includes('/')) {
+        return modelName;
+    }
+    if (modelName) {
+        log.warning(`Model "${modelName}" is not an OpenRouter model id. Falling back to ${OPENROUTER_DEFAULT_MODEL}.`);
+    }
+    return OPENROUTER_DEFAULT_MODEL;
+};
+
+const getOpenRouterProvider = () => {
+    const token = process.env.APIFY_TOKEN;
+    if (!token) {
+        throw new Error('Missing APIFY_TOKEN for OpenRouter proxy.');
+    }
+    return createOpenAI({
+        baseURL: OPENROUTER_BASE_URL,
+        apiKey: OPENROUTER_API_KEY_PLACEHOLDER,
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+        name: 'openrouter',
+    });
+};
+
+let toolsCache: { name: string; description?: string; input_schema: unknown; title?: string }[] = [];
+let client: Client | null = null;
+
+/**
+ * NOTE: We intentionally keep two MCP clients:
+ * - AI SDK client for tool execution during LLM streaming.
+ * - MCP SDK client for notifications (tool list changes, logging).
+ *
+ * We wanted to use only the AI SDK MCP client, but it does not support
+ * notifications (sadly), so we keep the MCP SDK client for live updates and
+ * cache refresh.
+ *
+ * Example usage:
+ * ```ts
+ * const mcpClient = await createAiSdkMcpClient();
+ * const tools = await mcpClient.tools();
+ * const result = streamText({ model, messages, tools });
+ * await mcpClient.close();
+ * ```
+ */
+const createAiSdkMcpClient = async () => {
+    const transportType = runtimeSettings.mcpTransportType === 'sse' ? 'sse' : 'http';
+    return createMCPClient({
+        transport: {
+            type: transportType,
+            url: runtimeSettings.mcpUrl,
+            headers: input.headers,
+        },
+        name: 'apify-mcp-client',
+        version: '1.0.0',
+    });
+};
+
+const {
+    getSettings,
+    updateSettings,
+    resetSettings,
+} = createSettingsHandlers({
+    getRuntimeSettings: () => runtimeSettings,
+    setRuntimeSettings: (next) => {
+        runtimeSettings = next;
+    },
+    defaultSettings: defaultRuntimeSettings,
+    onSettingsUpdated: async (next, patch) => {
+        if (patch.mcpUrl !== undefined || patch.mcpTransportType !== undefined) {
+            if (client) {
+                try {
+                    await client.close();
+                } catch (err) {
+                    log.warning('Error closing client connection:', { error: err });
+                }
+                client = null;
+            }
+        }
+        log.info(`Settings updated: ${JSON.stringify(next)}`);
+    },
+});
+
+const {
+    availableTools,
+    apiTools,
+} = createToolsHandlers({
+    getToolsCache: () => toolsCache,
+    ensureToolsCache: async () => {
+        if (toolsCache.length === 0) {
+            await getOrCreateClient();
+        }
+    },
+    onError: (error) => {
+        log.error('Error fetching tools', { error: error.message });
+    },
+});
+
+const schemaModelsHandler = createSchemaModelsHandler(
+    inputSchema.properties.modelName as { enum?: string[]; enumTitles?: string[] },
+);
 
 const app = express();
 app.use(express.json());
@@ -130,84 +201,31 @@ const publicPath = path.join(path.dirname(filename), 'public');
 const publicUrl = ACTOR_IS_AT_HOME ? HOST : `${HOST}:${PORT}`;
 app.use(express.static(publicPath));
 
-const persistedConversation = (await Actor.getValue<MessageParam[]>(CONVERSATION_RECORD_NAME)) ?? [];
-const conversationCounter = new Counter(persistedConversation.length);
+const persistedConversationRaw = await Actor.getValue(CONVERSATION_RECORD_NAME);
+let modelConversation: ModelMessage[] = coerceStoredConversation(persistedConversationRaw);
+const conversationCounter = new Counter(modelMessagesToLegacyConversation(modelConversation).length);
 
-/** Real or non-operational tracer is created */
-let tracer;
-if (input.telemetry) {
-    const { PHOENIX_API_KEY, COLLECTOR_ENDPOINT } = process.env;
-    if (PHOENIX_API_KEY && COLLECTOR_ENDPOINT) {
-        tracer = initializeTelemetry(PHOENIX_API_KEY, COLLECTOR_ENDPOINT);
-    } else {
-        log.warning('Telemetry requested but environment variables not set. '
-            + 'PHOENIX_API_KEY and COLLECTOR_ENDPOINT are required for telemetry.');
-        tracer = noopTracer();
-    }
-} else {
-    tracer = noopTracer();
-}
+const persistConversation = async () => {
+    await Actor.setValue(CONVERSATION_RECORD_NAME, modelConversation);
+};
 
-const conversationManager = new ConversationManager(
-    input.systemPrompt,
-    input.modelName,
-    input.llmProviderApiKey,
-    input.modelMaxOutputTokens,
-    input.maxNumberOfToolCallsPerQuery,
-    input.toolCallTimeoutSec,
-    tracer,
-    getChargeForTokens() ? new ActorTokenCharger() : null,
-    persistedConversation,
-);
-
-// This should not be needed, but just in case
 Actor.on('migrating', async () => {
     log.debug(`Migrating ... persisting conversation.`);
-    await Actor.setValue(CONVERSATION_RECORD_NAME, conversationManager.getConversation());
+    await persistConversation();
 });
 
-// Only one browser client can be connected at a time
-type BrowserSSEClient = { id: number; res: express.Response };
-let browserClients: BrowserSSEClient[] = [];
-let nextClientId = 1;
+const updateToolsCache = async (listTools: ListToolsResult) => {
+    toolsCache = listTools.tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        input_schema: tool.inputSchema,
+        title: tool.annotations?.title,
+    }));
+};
 
-// Create a single instance of your MCP client (client is connected to the MCP-server)
-let client: Client | null = null;
-
-// 5) SSE endpoint for the client.js (browser)
-app.get('/sse', async (req, res) => {
-    // Required headers for SSE
-    res.set({
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no', // Disable proxy buffering
-    });
-    res.flushHeaders();
-
-    const clientId = nextClientId++;
-    const keepAliveInterval = setInterval(() => {
-        res.write(':\n\n'); // Send a comment as a keepalive
-    }, 5000); // Send keepalive every 5 seconds
-
-    browserClients.push({ id: clientId, res });
-    log.debug(`Browser client ${clientId} connected`);
-
-    // If a client closes connection, clear an interval and remove from an array
-    req.on('close', () => {
-        log.debug(`Browser client ${clientId} disconnected`);
-        clearInterval(keepAliveInterval);
-        browserClients = browserClients.filter((browserClient) => browserClient.id !== clientId);
-    });
-
-    // Handle client timeout
-    req.on('timeout', () => {
-        log.debug(`Browser client ${clientId} timeout`);
-        clearInterval(keepAliveInterval);
-        browserClients = browserClients.filter((browserClient) => browserClient.id !== clientId);
-        res.end();
-    });
-});
+const handleNotification = (notification: LoggingMessageNotification) => {
+    log.debug(`Notification received: ${notification.params.level} - ${notification.params.data}`);
+};
 
 /**
  * Helper function to create or get existing MCP client
@@ -222,8 +240,8 @@ async function getOrCreateClient(): Promise<Client> {
                 runtimeSettings.mcpUrl,
                 runtimeSettings.mcpTransportType,
                 input.headers,
-                async (tools) => await conversationManager.handleToolUpdate(tools),
-                (notification) => conversationManager.handleNotification(notification),
+                async (tools) => updateToolsCache(tools),
+                (notification) => handleNotification(notification),
             );
         } catch (err) {
             const error = err as Error;
@@ -254,32 +272,190 @@ app.post('/message', async (req, res) => {
     const { query } = req.body;
     if (!query) return res.status(400).json({ error: 'Missing "query" field' });
 
+    let mcpClient: Awaited<ReturnType<typeof createAiSdkMcpClient>> | null = null;
     try {
-        // Process the query
         await Actor.pushData({ role: 'user', content: query });
-        const mcpClient = await getOrCreateClient();
-        await conversationManager.processUserQuery(mcpClient, query, async (role, content) => {
-            // Key used for sorting messages in the client UI
+        modelConversation.push({ role: 'user', content: query });
+
+        const openrouter = getOpenRouterProvider();
+        mcpClient = await createAiSdkMcpClient();
+        const tools = await mcpClient.tools();
+        const modelId = resolveOpenRouterModel(runtimeSettings.modelName);
+
+        const result = streamText({
+            model: openrouter.chat(modelId),
+            messages: modelConversation,
+            system: runtimeSettings.systemPrompt,
+            maxOutputTokens: runtimeSettings.modelMaxOutputTokens,
+            tools,
+            stopWhen: stepCountIs(runtimeSettings.maxNumberOfToolCallsPerQuery),
+        });
+
+        const assistantBefore: AssistantModelMessage[] = [];
+        const assistantAfter: AssistantModelMessage[] = [];
+        const toolResults: ToolResultPart[] = [];
+        let toolResultsSeen = false;
+        let pendingTextForSse = '';
+        let currentAssistantText = '';
+        let currentToolCalls: { toolCallId: string; toolName: string; input: unknown }[] = [];
+
+        const recordEvent = async (data: object) => {
+            await Actor.pushData(data);
+        };
+
+        const emitTextIfAny = async () => {
+            if (!pendingTextForSse) {
+                return;
+            }
             const key = conversationCounter.increment();
-            await broadcastSSE({
-                role,
-                content,
+            await recordEvent({
+                role: 'assistant',
+                content: pendingTextForSse,
                 key,
             });
-        });
-        // Charge for task completion
-        await Actor.charge({ eventName: Event.QUERY_ANSWERED, count: 1 });
-        log.info(`Charged query answered event`);
+            pendingTextForSse = '';
+        };
 
-        // Send a finished flag
-        await broadcastSSE({ role: 'system', content: '', finished: true });
+        const finalizeAssistantMessage = () => {
+            if (!currentAssistantText && currentToolCalls.length === 0) {
+                return;
+            }
+            if (currentToolCalls.length === 0) {
+                const message: AssistantModelMessage = { role: 'assistant', content: currentAssistantText };
+                if (toolResultsSeen) {
+                    assistantAfter.push(message);
+                } else {
+                    assistantBefore.push(message);
+                }
+            } else {
+                const contentParts: (
+                    | { type: 'text'; text: string }
+                    | { type: 'tool-call'; toolCallId: string; toolName: string; input: unknown }
+                )[] = [];
+                if (currentAssistantText) {
+                    contentParts.push({ type: 'text', text: currentAssistantText });
+                }
+                contentParts.push(
+                    ...currentToolCalls.map((call) => ({
+                        type: 'tool-call' as const,
+                        toolCallId: call.toolCallId,
+                        toolName: call.toolName,
+                        input: call.input,
+                    })),
+                );
+                const message: AssistantModelMessage = { role: 'assistant', content: contentParts };
+                if (toolResultsSeen) {
+                    assistantAfter.push(message);
+                } else {
+                    assistantBefore.push(message);
+                }
+            }
+            currentAssistantText = '';
+            currentToolCalls = [];
+        };
+
+        for await (const part of result.fullStream) {
+            if (part.type === 'text-delta') {
+                currentAssistantText += part.text;
+                pendingTextForSse += part.text;
+                continue;
+            }
+            if (part.type === 'tool-call') {
+                await emitTextIfAny();
+                currentToolCalls.push({
+                    toolCallId: part.toolCallId,
+                    toolName: part.toolName,
+                    input: part.input,
+                });
+                const key = conversationCounter.increment();
+                await recordEvent({
+                    role: 'assistant',
+                    content: [{
+                        type: 'tool_use',
+                        id: part.toolCallId,
+                        name: part.toolName,
+                        input: part.input,
+                    }],
+                    key,
+                });
+                continue;
+            }
+            if (part.type === 'tool-result') {
+                if (!toolResultsSeen) {
+                    finalizeAssistantMessage();
+                    toolResultsSeen = true;
+                }
+                const output = part.output as ToolResultOutput;
+                const legacyBlock = toolResultToLegacyBlock(part.toolCallId, output);
+                toolResults.push({
+                    type: 'tool-result',
+                    toolCallId: part.toolCallId,
+                    toolName: part.toolName,
+                    output,
+                });
+                const key = conversationCounter.increment();
+                await recordEvent({
+                    role: 'user',
+                    content: [legacyBlock],
+                    key,
+                });
+                continue;
+            }
+            if (part.type === 'tool-error') {
+                if (!toolResultsSeen) {
+                    finalizeAssistantMessage();
+                    toolResultsSeen = true;
+                }
+                const legacyBlock = toolResultToLegacyBlock(part.toolCallId, {
+                    type: 'error-text',
+                    value: part.error instanceof Error ? part.error.message : String(part.error),
+                });
+                toolResults.push({
+                    type: 'tool-result',
+                    toolCallId: part.toolCallId,
+                    toolName: part.toolName,
+                    output: {
+                        type: 'error-text',
+                        value: part.error instanceof Error ? part.error.message : String(part.error),
+                    },
+                });
+                const key = conversationCounter.increment();
+                await recordEvent({
+                    role: 'user',
+                    content: [legacyBlock],
+                    key,
+                });
+            }
+        }
+
+        await emitTextIfAny();
+        finalizeAssistantMessage();
+
+        if (assistantBefore.length > 0) {
+            modelConversation.push(...assistantBefore);
+        }
+        if (toolResults.length > 0) {
+            modelConversation.push({ role: 'tool', content: toolResults });
+        }
+        if (assistantAfter.length > 0) {
+            modelConversation.push(...assistantAfter);
+        }
+        await persistConversation();
+
+        await recordEvent({ role: 'system', content: '', finished: true });
         return res.json({ ok: true });
     } catch (err) {
         const error = err as Error;
         log.exception(error, `Error in processing user query: ${query}`);
+        modelConversation.push({ role: 'assistant', content: error.message });
+        await persistConversation();
         // Send finished flag with error
-        await broadcastSSE({ role: 'system', content: error.message, finished: true, error: true });
+        await Actor.pushData({ role: 'system', content: error.message, finished: true, error: true });
         return res.json({ ok: false, error: error.message });
+    } finally {
+        if (mcpClient) {
+            await mcpClient.close();
+        }
     }
 });
 
@@ -294,6 +470,87 @@ app.get('/reconnect-mcp-server', async (_req, res) => {
     } catch (err) {
         const error = err as Error;
         return res.json({ ok: false, error: error.message });
+    }
+});
+
+/**
+ * GET /mcp/health endpoint to verify MCP connectivity for the new UI.
+ */
+app.get('/mcp/health', async (_req, res) => {
+    try {
+        const mcpClient = await getOrCreateClient();
+        await mcpClient.ping();
+        return res.json({ ok: true });
+    } catch (err) {
+        const error = err as Error;
+        return res.json({ ok: false, error: error.message });
+    }
+});
+
+/**
+ * GET /api/tools endpoint for the new UI tool list.
+ */
+app.get('/api/tools', async (_req, res) => {
+    return apiTools(_req, res, () => {});
+});
+
+/**
+ * POST /api/chat endpoint for the new AI SDK chat flow.
+ */
+app.post('/api/chat', async (req, res) => {
+    const { messages } = req.body ?? {};
+    if (!Array.isArray(messages)) {
+        res.status(400).json({ error: 'Missing "messages" array.' });
+        return;
+    }
+
+    let mcpClient: Awaited<ReturnType<typeof createAiSdkMcpClient>> | null = null;
+    let closeCalled = false;
+    const closeClient = async () => {
+        if (mcpClient && !closeCalled) {
+            closeCalled = true;
+            await mcpClient.close();
+        }
+    };
+
+    try {
+        const openrouter = getOpenRouterProvider();
+        mcpClient = await createAiSdkMcpClient();
+        const tools = await mcpClient.tools();
+        const modelId = resolveOpenRouterModel(runtimeSettings.modelName);
+
+        const modelMessages = await convertToModelMessages(messages);
+        const result = streamText({
+            model: openrouter.chat(modelId),
+            messages: modelMessages,
+            system: runtimeSettings.systemPrompt,
+            maxOutputTokens: runtimeSettings.modelMaxOutputTokens,
+            tools,
+            stopWhen: stepCountIs(runtimeSettings.maxNumberOfToolCallsPerQuery),
+            onFinish: async () => {
+                await closeClient();
+                await closeClient();
+            },
+            onError: async (error) => {
+                log.error('AI SDK chat error', { error: (error instanceof Error) ? error.message : String(error) });
+                await closeClient();
+            },
+        });
+
+        res.on('close', () => {
+            closeClient().catch((error) => {
+                log.error('Error closing MCP client', { error: error instanceof Error ? error.message : String(error) });
+            });
+        });
+
+        result.pipeTextStreamToResponse(res);
+    } catch (err) {
+        const error = err as Error;
+        log.error('Error in /api/chat', { error: error.message, stack: error.stack });
+        await closeClient();
+        if (!res.headersSent) {
+            res.status(500).json({ error: error.message });
+        }
     }
 });
 
@@ -335,8 +592,8 @@ app.get('/check-actor-timeout', (_req, res) => {
  */
 app.post('/conversation/reset', async (_req, res) => {
     log.debug('Resetting conversation');
-    conversationManager.resetConversation();
-    await Actor.setValue(CONVERSATION_RECORD_NAME, conversationManager.getConversation());
+    modelConversation = [];
+    await persistConversation();
     res.json({ ok: true });
 });
 
@@ -344,146 +601,54 @@ app.post('/conversation/reset', async (_req, res) => {
  * GET /available-tools endpoint to fetch available tools
  */
 app.get('/available-tools', async (_req, res) => {
-    try {
-        const mcpClient = await getOrCreateClient();
-        const tools = await conversationManager.updateAndGetTools(mcpClient);
-        return res.json({ tools });
-    } catch (err) {
-        const error = err as Error;
-        log.error(`Error fetching tools: ${error.message}`);
-        return res.status(500).json({ error: 'Failed to fetch tools' });
-    }
+    return availableTools(_req, res, () => {});
 });
 
 /**
  * GET /settings endpoint to retrieve current settings
  */
 app.get('/settings', (_req, res) => {
-    res.json(runtimeSettings);
+    return getSettings(_req, res, () => {});
 });
 
 /**
  * GET /schema/models endpoint to retrieve available model options from input schema
  */
 app.get('/schema/models', (_req, res) => {
-    const { enum: models, enumTitles } = inputSchema.properties.modelName;
-    const modelOptions = models.map((model: string, index: number) => ({
-        value: model,
-        label: enumTitles[index],
-    }));
-    res.json(modelOptions);
+    return schemaModelsHandler(_req, res, () => {});
 });
 
 /**
  * POST /settings endpoint to update settings
  */
 app.post('/settings', async (req, res) => {
-    try {
-        const newSettings = req.body;
-        if (newSettings.mcpUrl !== undefined && !newSettings.mcpUrl) {
-            res.status(400).json({ success: false, error: 'MCP URL is required' });
-            return;
-        }
-        if (newSettings.modelName !== undefined && !newSettings.modelName) {
-            res.status(400).json({ success: false, error: 'Model name is required' });
-            return;
-        }
-        runtimeSettings = {
-            ...runtimeSettings,
-            ...newSettings,
-        };
-        await conversationManager.updateClientSettings({
-            systemPrompt: runtimeSettings.systemPrompt,
-            modelName: runtimeSettings.modelName,
-            modelMaxOutputTokens: runtimeSettings.modelMaxOutputTokens,
-            maxNumberOfToolCallsPerQuery: runtimeSettings.maxNumberOfToolCallsPerQuery,
-            toolCallTimeoutSec: runtimeSettings.toolCallTimeoutSec,
-        });
-
-        if (newSettings.mcpUrl !== undefined || newSettings.mcpTransportType !== undefined) {
-            if (client) {
-                try {
-                    await client.close();
-                } catch (err) {
-                    log.warning('Error closing client connection:', { error: err });
-                }
-                client = null;
-            }
-            // The next API request will create a new client with updated settings
-        }
-        log.info(`Settings updated: ${JSON.stringify(runtimeSettings)}`);
-        res.json({ success: true });
-    } catch (error) {
-        log.error('Error updating settings:', { error: (error instanceof Error) ? error.message : String(error) });
-        res.status(500).json({ success: false, error: 'Failed to update settings' });
-    }
+    return updateSettings(req, res, () => {});
 });
 
 /**
  * POST /settings/reset endpoint to reset settings to defaults
  */
 app.post('/settings/reset', async (_req, res) => {
-    try {
-        runtimeSettings = {
-            mcpUrl: input.mcpUrl,
-            mcpTransportType: input.mcpTransportType,
-            systemPrompt: input.systemPrompt,
-            modelName: input.modelName,
-            modelMaxOutputTokens: input.modelMaxOutputTokens,
-            maxNumberOfToolCallsPerQuery: input.maxNumberOfToolCallsPerQuery,
-            toolCallTimeoutSec: input.toolCallTimeoutSec,
-        };
-        await conversationManager.updateClientSettings({
-            systemPrompt: runtimeSettings.systemPrompt,
-            modelName: runtimeSettings.modelName,
-            modelMaxOutputTokens: runtimeSettings.modelMaxOutputTokens,
-            maxNumberOfToolCallsPerQuery: runtimeSettings.maxNumberOfToolCallsPerQuery,
-            toolCallTimeoutSec: runtimeSettings.toolCallTimeoutSec,
-        });
-
-        // Close the existing client to force recreation with default settings
-        if (client) {
-            try {
-                await client.close();
-            } catch (err) {
-                log.warning('Error closing client connection:', { error: err });
-            }
-            client = null;
-        }
-        res.json({ success: true });
-    } catch (error) {
-        log.error('Error resetting settings:', { error: (error instanceof Error) ? error.message : String(error) });
-        res.status(500).json({ success: false, error: 'Failed to reset settings' });
-    }
+    return resetSettings(_req, res, () => {});
 });
 
 app.get('/conversation', (_req, res) => {
-    res.json(conversationManager.getConversation());
+    res.json(modelMessagesToLegacyConversation(modelConversation));
 });
 
 app.get('*', (_req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-/**
- * Broadcasts an event to all connected SSE clients
- */
-async function broadcastSSE(data: object) {
-    log.debug('Push data into Apify dataset and persist conversation');
-    await Actor.pushData(data);
-    await Actor.setValue(CONVERSATION_RECORD_NAME, conversationManager.getConversation());
-
-    log.debug(`Broadcasting message to ${browserClients.length} clients`);
-    const message = `data: ${JSON.stringify(data)}\n\n`;
-    browserClients.forEach((browserClient) => {
-        browserClient.res.write(message);
-    });
-}
-
 app.listen(PORT, async () => {
     log.info(`Serving from ${path.join(publicPath, 'index.html')}`);
     const msg = `Navigate to ${publicUrl} to interact with the chat UI.`;
     await Actor.setStatusMessage(msg);
+    try {
+        await getOrCreateClient();
+    } catch (error) {
+        log.warning('Failed to initialize MCP client on startup', { error });
+    }
 });
 
 // Fix Ctrl+C for npm run start

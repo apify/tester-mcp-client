@@ -6,11 +6,16 @@
     "outDir": "dist",
     "moduleResolution": "node",
     "noUnusedLocals": false,
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "typeRoots": ["./types", "./node_modules/@types"],
-    "strict": true
+    "strict": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["frontend/src/*"]
+    }
   },
-  "include": ["./src/**/*"],
+  "include": ["src/**/*", "frontend/src/**/*"],
   "exclude": ["node_modules"]
 }

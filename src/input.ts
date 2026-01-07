@@ -1,12 +1,6 @@
-import { defaults, deprecatedModels, MISSING_PARAMETER_ERROR } from './const.js';
+import { defaults, MISSING_PARAMETER_ERROR } from './const.js';
 import { log } from './logger.js';
 import type { Input, StandbyInput } from './types.js';
-
-let isChargingForTokens = true;
-
-export function getChargeForTokens() {
-    return isChargingForTokens;
-}
 
 /**
  * Process input parameters, split actors string into an array
@@ -14,7 +8,7 @@ export function getChargeForTokens() {
  * @returns input
  */
 export function processInput(originalInput: Partial<Input> | Partial<StandbyInput>): Input {
-    // Normalize deprecated transport type before casting
+    // Normalize a deprecated transport type before casting
     let { mcpTransportType } = originalInput;
     if (mcpTransportType === 'http-streamable-json-response') {
         mcpTransportType = 'http';
@@ -59,24 +53,14 @@ export function processInput(originalInput: Partial<Input> | Partial<StandbyInpu
         throw new Error(`LLM model name is not provided. ${MISSING_PARAMETER_ERROR}: 'modelName'`);
     }
 
-    if (deprecatedModels[input.modelName]) {
-        log.warning(`The model "${input.modelName}" is deprecated and will be removed in future versions. Using ${deprecatedModels[input.modelName]} instead.`);
-        input.modelName = deprecatedModels[input.modelName];
-    }
-
-    if (input.llmProviderApiKey && input.llmProviderApiKey !== '') {
-        log.info('Using user provided API key for an LLM provider');
-        isChargingForTokens = false;
-    } else {
-        log.info('No API key provided for an LLM provider, Actor will charge for tokens usage');
-        input.llmProviderApiKey = process.env.LLM_PROVIDER_API_KEY ?? '';
-    }
-
     if (input.telemetry) {
         log.info('Telemetry is enabled, all data will be saved to improve the MCP tools. Can be disabled by setting "telemetry" to false in the input.');
     }
-    // update system prompt with current date and time
+    // update system prompt with the current date and time
     const currentDate = new Date().toUTCString();
-    input.systemPrompt += `\nCurrent date and UTC time ${currentDate}`;
+    const datePrompt = `\nCurrent date and UTC time ${currentDate}`;
+    if (!input.systemPrompt.includes('Current date and UTC time')) {
+        input.systemPrompt += datePrompt;
+    }
     return input as Input;
 }

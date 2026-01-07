@@ -6,7 +6,7 @@ storage
 apify_storage
 crawlee_storage
 node_modules
-dist
+dist/*
 tsconfig.tsbuildinfo
 storage/*
 !storage/key_value_stores
